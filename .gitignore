@@ -1,0 +1,19 @@
+# Dependencias y builds
+node_modules/
+dist/
+
+# Sesiones de brainstorming
+.superpowers/
+
+# Archivos de entorno (nunca al repo); el ejemplo sí va
+.env
+.env.*
+!.env.example
+
+# Artefactos de herramientas
+.wrangler/
+playwright-report/
+test-results/
+supabase/.temp/
+supabase/.branches/
+.claude/settings.local.json
