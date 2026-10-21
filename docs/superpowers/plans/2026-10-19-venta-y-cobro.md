@@ -39,6 +39,7 @@ Son las decisiones que el spec no cubre y que tomaron los agentes, más los huec
 - Vuelto: no se guarda (2026-10-20). Si hace falta, se agrega después con una columna nullable.
 - Prefijos de PC: el check de la tarea 3 ya acepta `^[A-Z]{1,3}$`; la tarea 8 no lo altera (2026-10-20).
 - Venta sin turno: no existe, ni para el jefe. `ventas.turno_id` sigue `not null` (2026-10-20).
+- Tarea 10, tras la revisión de seguridad (2026-10-21): `140_aislamiento.test.sql` suma una prueba (`set_eq`) con la lista exacta de funciones `security definer` de `public`. Las tareas 11, 15 y 16, que agregan funciones `security definer`, suman cada nombre a esa lista y un caso de B contra A en el mismo archivo, además del nombre en la prueba 5 de `150`.
 - Tarea 3, tras la revisión de seguridad (2026-10-20): `rls_base` quita también MAINTAIN y cambia los permisos por defecto de `public` (tablas, secuencias y funciones nuevas no dan nada a `anon` ni a `authenticated`, y las funciones no dan EXECUTE a PUBLIC). Cada objeto nuevo necesita su `grant` explícito; las funciones de las tareas 4 a 18 ya lo traen. `010_rls.test.sql` pasó de 27 a 44 pruebas y cambió su numeración: las tareas 15 y 18 ubican las pruebas por su descripción ("el jefe ve el historial de auditoría", antes la 25; `tables_are`, la 1). La tarea 18 además tiene que exceptuar por nombre `version_app` (select de `anon`) y `version_minima()` (execute de `anon`) en las pruebas de permisos ("anon y PUBLIC no tienen nada en public" y "anon (ni PUBLIC) no ejecuta ninguna función de public").
 - Supabase: local (Docker) para las tareas 2 a 14, con los tests de base y de integración. Paso a online después de la tarea 14; después siguen los tests online. El acceso (invitación o `supabase link` hecho por Felipe) se define en ese hito.
 
@@ -3963,7 +3964,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(7);
 
--- Genéricas sobre TODAS las funciones security definer de public: cubren las de las tareas 11 a 17 sin tocarlas.
+-- Genéricas sobre TODAS las funciones security definer de public. El aislamiento de cada una lo prueba su caso en 140_aislamiento.
 select is_empty($$
   select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
