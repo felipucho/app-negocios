@@ -117,12 +117,14 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
 -- 20 a 25: lo que quedó grabado, visto como postgres
 reset role;
 select results_eq(
-  $$ select venta_id, cuenta_id, dispositivo_id from public.anulaciones order by venta_id $$,
+  $$ select venta_id, cuenta_id, dispositivo_id from public.anulaciones
+     where venta_id in ('a4000000-0000-0000-0000-000000000001', 'a4000000-0000-0000-0000-000000000002') order by venta_id $$,
   $$ values ('a4000000-0000-0000-0000-000000000001'::uuid, 'c0000000-0000-0000-0000-00000000000a'::uuid, 'a1000000-0000-0000-0000-000000000001'::uuid),
             ('a4000000-0000-0000-0000-000000000002'::uuid, 'c0000000-0000-0000-0000-00000000001a'::uuid, 'a1000000-0000-0000-0000-000000000001'::uuid) $$,
   'una sola anulación por venta, con cuenta y dispositivo');
 select results_eq(
-  $$ select entidad_id, motivo, cuenta_id from public.historial where tipo = 'anulacion' order by entidad_id $$,
+  $$ select entidad_id, motivo, cuenta_id from public.historial where tipo = 'anulacion'
+     and entidad_id in ('a4000000-0000-0000-0000-000000000001', 'a4000000-0000-0000-0000-000000000002') order by entidad_id $$,
   $$ values ('a4000000-0000-0000-0000-000000000001'::uuid, 'Se cobró dos veces'::text, 'c0000000-0000-0000-0000-00000000000a'::uuid),
             ('a4000000-0000-0000-0000-000000000002'::uuid, 'Devolución del cliente'::text, 'c0000000-0000-0000-0000-00000000001a'::uuid) $$,
   'cada anulación queda en el historial con su motivo, sin duplicados por los reintentos');

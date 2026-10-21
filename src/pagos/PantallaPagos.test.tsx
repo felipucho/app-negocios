@@ -97,6 +97,15 @@ describe('PantallaPagos', () => {
     expect(botonConfirmar()).toBeEnabled()
   })
 
+  it('el saldo propuesto queda seleccionado: tipear un importe lo reemplaza', async () => {
+    const { user, reloj } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    const tarjeta = screen.getByLabelText('Tarjeta')
+    await user.click(tarjeta)
+    await tipear(user, reloj, '1200')
+    expect(tarjeta).toHaveValue('1200')
+  })
+
   it('sin el módulo fiado no aparece el medio fiado', () => {
     armar({ fiado: false })
     expect(screen.queryByLabelText('Fiado')).toBeNull()

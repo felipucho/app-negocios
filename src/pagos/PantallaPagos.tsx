@@ -51,7 +51,7 @@ interface PropsCampoImporte {
   umbrales: Umbrales
   ahora?: () => number
   alCambiar(valor: string): void
-  alEnfocar(): void
+  alEnfocar(campo: HTMLInputElement): void
   alEscaneo(): void
 }
 
@@ -92,7 +92,7 @@ function CampoImporte({ etiqueta, valor, autoFocus, ref, umbrales, ahora, alCamb
         inputMode="numeric"
         autoComplete="off"
         autoFocus={autoFocus}
-        onFocus={alEnfocar}
+        onFocus={(e) => alEnfocar(e.currentTarget)}
         onChange={(e) => alCambiar(e.target.value)}
         onKeyDown={alTecla}
       />
@@ -171,10 +171,14 @@ export function PantallaPagos({
       : TEXTO_COBRO[e],
   )
 
-  /** Un medio vacío, al enfocarlo, propone el saldo restante. */
-  function proponer(medio: Medio) {
+  /** Un medio vacío, al enfocarlo, propone el saldo restante seleccionado: tipear un importe lo reemplaza. */
+  function proponer(medio: Medio, campo: HTMLInputElement) {
     if (textos[medio].trim() === '' && cobro.falta > 0) {
-      setTextos((t) => ({ ...t, [medio]: String(cobro.falta) }))
+      const saldo = String(cobro.falta)
+      // Primero en el DOM: React ve el mismo valor, no lo reescribe y la selección queda.
+      campo.value = saldo
+      campo.select()
+      setTextos((t) => ({ ...t, [medio]: saldo }))
     }
   }
 
@@ -255,7 +259,7 @@ export function PantallaPagos({
           umbrales={umbrales}
           ahora={ahora}
           alCambiar={(v) => setTextos((t) => ({ ...t, [m]: v }))}
-          alEnfocar={() => proponer(m)}
+          alEnfocar={(campo) => proponer(m, campo)}
           alEscaneo={avisarEscaneo}
         />
       ))}

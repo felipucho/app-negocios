@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatearPesos } from '../lib/plata'
 import type { Rol } from '../tipos'
 import { formatearNumeroVenta } from '../venta/confirmar'
@@ -19,9 +19,18 @@ export function CajaDelDia({ rol, servicio }: PropsCajaDelDia) {
   const [caja, setCaja] = useState<CajaDia | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
+  // Si el jefe ya eligió una fecha, un hoy() que llega tarde no se la pisa.
+  const fechaElegida = useRef(false)
 
   function leerHoy() {
-    servicio.hoy().then(setFecha, (e: unknown) => setError(mensajeCajaDelDia(e)))
+    servicio.hoy().then(
+      (hoy) => {
+        if (!fechaElegida.current) setFecha(hoy)
+      },
+      (e: unknown) => {
+        if (!fechaElegida.current) setError(mensajeCajaDelDia(e))
+      },
+    )
   }
 
   useEffect(leerHoy, [servicio])
@@ -62,7 +71,9 @@ export function CajaDelDia({ rol, servicio }: PropsCajaDelDia) {
               type="date"
               value={fecha ?? ''}
               onChange={(e) => {
-                if (e.target.value) setFecha(e.target.value)
+                if (!e.target.value) return
+                fechaElegida.current = true
+                setFecha(e.target.value)
               }}
             />
           </label>

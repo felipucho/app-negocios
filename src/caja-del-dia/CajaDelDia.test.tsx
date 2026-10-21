@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Rol } from '../tipos'
@@ -78,6 +78,19 @@ describe('CajaDelDia', () => {
     fireEvent.change(fecha, { target: { value: '2026-10-10' } })
     await waitFor(() => expect(servicio.leerCaja).toHaveBeenLastCalledWith('2026-10-10'))
     await waitFor(() => expect(servicio.leerVentas).toHaveBeenLastCalledWith('2026-10-10'))
+  })
+
+  it('si el jefe elige la fecha antes de que llegue hoy(), la respuesta tardía no la pisa', async () => {
+    const servicio = servicioFalso()
+    let responderHoy: (hoy: string) => void = () => undefined
+    servicio.hoy.mockImplementation(() => new Promise<string>((resolver) => (responderHoy = resolver)))
+    armar('jefe', servicio)
+    const fecha = screen.getByLabelText('Fecha')
+    fireEvent.change(fecha, { target: { value: '2026-10-10' } })
+    await waitFor(() => expect(servicio.leerCaja).toHaveBeenCalledWith('2026-10-10'))
+    await act(async () => responderHoy('2026-10-19'))
+    expect(fecha).toHaveValue('2026-10-10')
+    expect(servicio.leerCaja).not.toHaveBeenCalledWith('2026-10-19')
   })
 
   it('anular pide motivo; con motivo anula y recarga los totales', async () => {

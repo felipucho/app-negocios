@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "venta-y-cobro",
+  // Fecha del primer despliegue. Cambiarla es cambiar el comportamiento del runtime: sólo a propósito.
+  "compatibility_date": "2026-10-20",
+  // Sin "main": no hay código de Worker, sólo assets. _headers (dist/_headers) se aplica a los assets.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

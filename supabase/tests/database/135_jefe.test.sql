@@ -116,7 +116,8 @@ select results_eq(
   $$ values ('Cliente de B'::text), ('Marta'::text) $$,
   'los otros clientes, de A y de B, no cambiaron');
 select results_eq(
-  $$ select negocio_id, activo from public.modulos_negocio where modulo = 'fiado' order by negocio_id $$,
+  $$ select negocio_id, activo from public.modulos_negocio where modulo = 'fiado'
+     and negocio_id in ('a0000000-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-000000000000') order by negocio_id $$,
   $$ values ('a0000000-0000-0000-0000-000000000000'::uuid, true), ('b0000000-0000-0000-0000-000000000000'::uuid, false) $$,
   'una fila por kiosco: cada jefe cambia sólo el suyo');
 

@@ -5,20 +5,24 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build --mode development",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:integracion": "vitest run --config vitest.integracion.config.ts",
-    "test:db": "supabase test db"
+    "test:db": "supabase test db",
+    "test:e2e": "playwright test",
+    "deploy": "npm run typecheck && vite build --mode production && wrangler deploy"
   },
   "dependencies": {
+    "@sentry/browser": "^10.76.2",
     "@supabase/supabase-js": "^2.118.0",
     "dexie": "^4.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -32,6 +36,7 @@
     "supabase": "^2.121.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "wrangler": "^4.151.3"
   }
 }

@@ -134,7 +134,10 @@ select is((select negocio_id from public.clientes where nombre = 'Cliente de B' 
 select is((select count(*)::int from public.turnos
            where dispositivo_id = 'a1000000-0000-0000-0000-000000000001' and cierre is null), 1,
   'el turno de A sigue abierto');
-select is((select count(*)::int from public.anulaciones), 0, 'la venta de A sigue sin anular');
+select is((select count(*)::int from public.anulaciones where venta_id in
+           (select id from public.ventas where negocio_id in
+             ('a0000000-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-000000000000'))), 0,
+  'la venta de A sigue sin anular');
 select is((select precio from public.productos where id = 'a2000000-0000-0000-0000-000000000001'), 900,
   'el producto de A sigue con su precio');
 select is((select count(*)::int from public.productos where negocio_id = 'a0000000-0000-0000-0000-000000000000'), 1,

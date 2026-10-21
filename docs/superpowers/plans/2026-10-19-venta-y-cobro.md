@@ -15042,12 +15042,12 @@ read -r -p "dominio, o <nombre>.<subdominio>.workers.dev, sin https:// : " DOMIN
   Verificación:
   ```bash
   git status --short .env.production.local
-  npm run build
+  npx vite build --mode production
   grep -o "connect-src[^;]*" dist/_headers
   npx wrangler login
-  npx wrangler deploy
+  npm run deploy
   ```
-  Esperado: `git status` no imprime nada; el build termina con `✓ built in`; el `grep` muestra `connect-src 'self' https://<ref>.supabase.co`; `wrangler deploy` termina con `Uploaded venta-y-cobro` y la URL `https://venta-y-cobro.<subdominio>.workers.dev`. Desde el segundo despliegue alcanza con `npm run deploy`.
+  Esperado: `git status` no imprime nada; el build termina con `✓ built in` (si corta con `VITE_SUPABASE_URL de producción tiene que ser https y no local`, falta `.env.production.local`); el `grep` muestra `connect-src 'self' https://<ref>.supabase.co`; el deploy termina con `Uploaded venta-y-cobro` y la URL `https://venta-y-cobro.<subdominio>.workers.dev`. Desplegar siempre con `npm run deploy`: `npm run build` arma la versión local (modo development, Supabase local) y un `npx wrangler deploy` a mano después de él sube esa.
 
 - [ ] **D9. Dominio .com.ar, cuando esté decidido (costo no verificado).** Registrarlo en NIC Argentina, pasar su DNS a Cloudflare y sumar a `wrangler.jsonc`, después de `"compatibility_date"`:
   ```jsonc
@@ -15055,18 +15055,18 @@ read -r -p "dominio, o <nombre>.<subdominio>.workers.dev, sin https:// : " DOMIN
   ```
   Verificación:
   ```bash
-  npx wrangler deploy
+  npm run deploy
   curl -sI "https://$DOMINIO/" | head -1
   ```
   Esperado: `HTTP/2 200`. Repetir D3 con el dominio nuevo.
 
 - [ ] **D10. `_headers` aplicado, también en el fallback SPA (V1 de la parte 1).** Verificación:
   ```bash
-  curl -sI "https://$DOMINIO/una-ruta-que-no-existe" | grep -i -E "^(HTTP|content-security-policy|x-content-type-options|referrer-policy|permissions-policy)"
+  curl -sI "https://$DOMINIO/una-ruta-que-no-existe" | grep -i -E "^(HTTP|content-security-policy|x-content-type-options|referrer-policy|permissions-policy|strict-transport-security)"
   curl -sI "https://$DOMINIO/" | grep -i -c "content-security-policy"
   curl -s "https://$DOMINIO/_headers" | head -c 15; echo
   ```
-  Esperado: `HTTP/2 200` y las cuatro líneas de headers; `1`; `<!doctype html>` (el archivo `_headers` no se publica, V48). Si la ruta inexistente responde sin `content-security-policy`, V1 da negativo: no publicar para kioscos hasta que Felipe decida el plan B (CSP también en un `<meta http-equiv>` de `index.html`, que no admite `frame-ancestors`, o un Worker que ponga los headers).
+  Esperado: `HTTP/2 200` y las cinco líneas de headers (con `strict-transport-security: max-age=31536000`); `1`; `<!doctype html>` (el archivo `_headers` no se publica, V48). Si la ruta inexistente responde sin `content-security-policy`, V1 da negativo: no publicar para kioscos hasta que Felipe decida el plan B (CSP también en un `<meta http-equiv>` de `index.html`, que no admite `frame-ancestors`, o un Worker que ponga los headers).
 
 - [ ] **D11. Sentry DSN.** Crear un proyecto "Browser JavaScript" en Sentry (plan Developer; costo no verificado). En Settings → Security & Privacy del proyecto: "Data Scrubber" y "Use Default Scrubbers" prendidos, "Prevent Storing of IP Addresses" prendido. Poner el DSN en `VITE_SENTRY_DSN` de `.env.production.local`. Verificación:
   ```bash
