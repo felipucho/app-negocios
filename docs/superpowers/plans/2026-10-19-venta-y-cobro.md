@@ -36,6 +36,7 @@ Son las decisiones que el spec no cubre y que tomaron los agentes, más los huec
 - Resto de producto y operación: aceptado como está.
 - Caja abierta en otra pestaña: no se implementa.
 - Cierre remoto (V10): verificar antes del primer kiosco (V52).
+- Supabase: local (Docker) para las tareas 2 a 14, con los tests de base y de integración. Paso a online después de la tarea 14; después siguen los tests online. El acceso (invitación o `supabase link` hecho por Felipe) se define en ese hito.
 
 Siguen abiertos, pero son verificaciones y no decisiones: costos de Supabase Pro y Sentry, rendimiento del ranking, dominio `.com.ar` y consulta con abogado.
 
@@ -143,7 +144,7 @@ Las verificaciones V1 a V52 están en la sección de verificaciones de cada part
 | Tema | Qué se verificó | Fuente |
 |---|---|---|
 | Custom Access Token Hook | Firma `public.custom_access_token_hook(event jsonb) returns jsonb`; se devuelve el evento con `claims` modificado; `grant execute ... to supabase_auth_admin`, `grant usage on schema public to supabase_auth_admin`, `revoke execute ... from authenticated, anon, public`; la doc desaconseja `security definer` en el hook; si el hook lee tablas con RLS, hace falta una policy para `supabase_auth_admin`. | https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook y https://supabase.com/docs/guides/auth/auth-hooks |
-| Config local del hook | `[auth.hook.custom_access_token]` con `enabled = true` y `uri = "pg-functions://..."`; `auth.enable_signup`, `auth.email.enable_signup`, `auth.jwt_expiry` (3600 por defecto). | https://supabase.com/docs/guides/local-development/cli/config |
+| Config local del hook | `[auth.hook.custom_access_token]` con `enabled = true` y `uri = "pg-functions://..."`; `auth.enable_signup` (false: bloquea el registro público), `auth.email.enable_signup` (debe quedar en true: en false apaga el login por email, verificado en local con `email_provider_disabled`), `auth.jwt_expiry` (3600 por defecto). | https://supabase.com/docs/guides/local-development/cli/config |
 | security definer + search_path vacío | `security definer` exige fijar `search_path`; con `set search_path = ''` todo va calificado con esquema; las funciones nuevas dan EXECUTE a PUBLIC por defecto; hay que revocar a `public` y a cada rol con grant directo, como `anon`. | https://supabase.com/docs/guides/database/functions y https://www.postgresql.org/docs/current/sql-createfunction.html |
 | pgTAP con `supabase test db` | Lee `supabase/tests`; archivos `.sql` o `.pg`; cada archivo hace `begin; create extension if not exists pgtap with schema extensions; select plan(n); ... select * from finish(); rollback;`; requiere `supabase start`; salida con `All tests successful.` y `Result: PASS`. | https://supabase.com/docs/guides/local-development/testing/overview y https://supabase.com/docs/reference/cli/supabase-test-db |
 | Dexie | `*keyPath` es índice multiEntry; `db.version(n).stores({...})`; un cambio de esquema es una versión nueva, nunca se edita una versión publicada que tenga upgrader; import `{ Dexie, type EntityTable }` y clase que extiende `Dexie` con `tabla!: EntityTable<T, 'id'>`. | https://dexie.org/docs/Version/Version.stores() , https://dexie.org/docs/Tutorial/Design , https://dexie.org/docs/Typescript |
@@ -602,17 +603,13 @@ En `supabase/config.toml`, dentro de la sección `[auth]`, cambiar la línea `en
 ```toml
 enable_signup = false
 ```
-Y dentro de la sección `[auth.email]`, cambiar `enable_signup = true` por:
-```toml
-enable_signup = false
-```
-Las cuentas las crea Felipe (decisión 2); nadie se registra solo.
+NO tocar `[auth.email]`: su `enable_signup` queda en `true`. Si se pone en `false`, GoTrue apaga el login con email entero (`email_provider_disabled`) y la tarea 4 no puede iniciar sesión (verificado en local). Las cuentas las crea Felipe (decisión 2); nadie se registra solo.
 
 Run:
 ```bash
 grep -n "enable_signup\|enable_anonymous_sign_ins" supabase/config.toml
 ```
-Expected: todas las líneas listadas terminan en `= false`.
+Expected: `[auth]` con `enable_signup = false` y `enable_anonymous_sign_ins = false`; `[auth.email]` con `enable_signup = true`. Aparecen también `[auth.sms] enable_signup = false` (ya venía así) y una línea de comentario sobre `enable_anonymous_sign_ins`; no cuentan.
 
 - [ ] **Step 4: Anotar el límite de filas de la API (V13)**
 
