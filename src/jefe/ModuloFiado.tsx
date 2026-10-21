@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { mensajeJefe, type ServicioJefe } from './jefe'
 
 export interface PropsModuloFiado {
-  /** Estado actual (modulo_activo, leído por la tarea 17). */
-  activo: boolean
+  /** Estado actual (modulo_activo, leído por la tarea 17). null: no se pudo leer todavía. */
+  activo: boolean | null
   servicio: Pick<ServicioJefe, 'cambiarModuloFiado'>
   /** El kiosco actualiza su estado: la pantalla de cobro muestra u oculta el fiado. */
   alCambiar(activo: boolean): void
@@ -30,10 +30,16 @@ export function ModuloFiado({ activo, servicio, alCambiar }: PropsModuloFiado) {
   return (
     <section className="modulo-fiado">
       <h2>Módulo fiado</h2>
-      <label>
-        <input type="checkbox" checked={activo} disabled={guardando} onChange={(e) => void cambiar(e.target.checked)} />
-        Fiado activo
-      </label>
+      {activo === null ? (
+        <p role="alert" className="aviso aviso--error">
+          No se pudo leer el módulo fiado. Revisá la conexión: se vuelve a intentar solo.
+        </p>
+      ) : (
+        <label>
+          <input type="checkbox" checked={activo} disabled={guardando} onChange={(e) => void cambiar(e.target.checked)} />
+          Fiado activo
+        </label>
+      )}
       <p>Con el fiado activo, la caja puede cobrar una parte de la venta como fiado y dar de alta clientes.</p>
       <p>
         Con el fiado apagado, la caja no muestra el medio Fiado, y la base rechaza los pagos fiados y las altas de clientes

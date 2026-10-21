@@ -82,6 +82,15 @@ async function vaciar(db: CacheCatalogo): Promise<void> {
   })
 }
 
+/** Al entrar: si quedó el catálogo de otro negocio (un borrarCache que falló al salir), la caja no busca en él. */
+export async function vaciarCacheAjena(db: CacheCatalogo, negocioId: string): Promise<void> {
+  // Lectura y vaciado juntos: una sincronización que ya escribió este negocio no se borra.
+  await db.transaction('rw', db.productos, db.meta, async () => {
+    const negocio = await db.meta.get('negocio_id')
+    if (negocio && negocio.valor !== negocioId) await vaciar(db)
+  })
+}
+
 /** Al cerrar sesión (la PC puede ser compartida, spec sección 10). La usa la tarea 17. */
 export async function borrarCache(db: CacheCatalogo = cacheDeLaApp()): Promise<void> {
   // La marca cambia meta: una sincronización en curso en otra pestaña la ve y no reescribe.

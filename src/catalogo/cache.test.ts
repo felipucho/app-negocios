@@ -2,7 +2,14 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it, vi } from 'vitest'
 import type { Producto } from '../tipos'
-import { borrarCache, buscarEnCache, buscarPorCodigoEnCache, CacheCatalogo, sincronizarCatalogo } from './cache'
+import {
+  borrarCache,
+  buscarEnCache,
+  buscarPorCodigoEnCache,
+  CacheCatalogo,
+  sincronizarCatalogo,
+  vaciarCacheAjena,
+} from './cache'
 import type { FuenteCatalogo } from './fuente'
 
 const coca: Producto = { id: 'p1', nombre: 'Coca Cola 500', precio: 1500, codigo_barras: 'ABC-7790', activo: true, creado_en_caja: false }
@@ -130,6 +137,18 @@ describe('búsquedas en caché', () => {
     expect((await buscarPorCodigoEnCache(db, 'ABC-7790'))?.nombre).toBe('Coca Cola 500')
     expect((await buscarPorCodigoEnCache(db, '111'))?.activo).toBe(false)
     expect(await buscarPorCodigoEnCache(db, 'abc-7790')).toBeUndefined()
+  })
+
+  it('vaciarCacheAjena deja el catálogo del mismo negocio y vacía el de otro', async () => {
+    const db = nuevaCache()
+    const { fuente } = fuenteFalsa('n1', 1, [coca])
+    await sincronizarCatalogo(db, fuente)
+    await vaciarCacheAjena(db, 'n1')
+    expect((await buscarPorCodigoEnCache(db, 'ABC-7790'))?.id).toBe('p1')
+    await vaciarCacheAjena(db, 'n2')
+    expect(await buscarPorCodigoEnCache(db, 'ABC-7790')).toBeUndefined()
+    expect(await buscarEnCache(db, 'coca')).toEqual([])
+    expect(await sincronizarCatalogo(db, fuente)).toEqual({ actualizado: true, version: 1 })
   })
 
   it('borrarCache deja todo vacío y obliga a recargar', async () => {

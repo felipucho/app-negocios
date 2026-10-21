@@ -58,6 +58,8 @@ export interface PropsPantallaCaja {
   pitar?: () => void
   /** Alta rápida ante código inexistente y "Reactivar" ante un desactivado (tarea 15). Sin esto, sólo avisa. */
   productos?: ServicioProductos
+  /** false mientras el kiosco muestra otra cosa encima o en lugar de la caja (la caja sigue montada). */
+  activa?: boolean
 }
 
 type EstadoTurno =
@@ -75,6 +77,7 @@ export function PantallaCaja({
   ahora,
   pitar = pitido,
   productos,
+  activa = true,
 }: PropsPantallaCaja) {
   const campo = useRef<HTMLInputElement>(null)
   const [estadoTurno, setEstadoTurno] = useState<EstadoTurno>({ tipo: 'cargando' })
@@ -132,15 +135,23 @@ export function PantallaCaja({
   }, [turnoId])
 
   // Decisión 13: el campo siempre con foco. Un clic suelto no lo saca; si no, el próximo escaneo se pierde sin aviso.
+  // Sólo con la caja a la vista: oculta, la guardia no debe trabar la selección de texto de las otras pantallas.
   useEffect(() => {
+    if (!activa) return
     const guardia = (e: MouseEvent) => {
       if (e.target instanceof Element && !e.target.closest(ENFOCABLES)) e.preventDefault()
     }
     document.addEventListener('mousedown', guardia)
     return () => document.removeEventListener('mousedown', guardia)
-  }, [])
+  }, [activa])
 
   const enfocar = () => campo.current?.focus()
+
+  // Al volver a la caja (otra sección, confirmación de cierre) el foco quedó en un botón o en <body>.
+  // Con el cobro o el alta abiertos, no: el foco es del importe o del Nombre.
+  useEffect(() => {
+    if (activa && !cobroAbiertoRef.current && altaRef.current === null) enfocar()
+  }, [activa])
 
   function ponerCobro(abierto: boolean) {
     cobroAbiertoRef.current = abierto
