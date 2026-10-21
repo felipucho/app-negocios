@@ -4,6 +4,7 @@ import { vi } from 'vitest'
 import type { CatalogoCaja } from '../caja/catalogoCaja'
 import { PantallaCaja, type SesionCobro } from '../caja/PantallaCaja'
 import type { FilaRanking } from '../caja/ranking'
+import type { ServicioProductos } from '../productos/productos'
 import { buscarPorNombre } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
 import type { ProductoCache } from '../tipos'
@@ -77,6 +78,8 @@ export interface OpcionesCaja {
   turno?: ReturnType<typeof turnoDePrueba>
   /** Respuesta de ranking_sin_codigo; 'falla' simula un error de red. */
   ranking?: FilaRanking[] | 'falla'
+  /** Alta rápida y reactivar (tarea 15). Sin esto, la caja sólo avisa, como en las tareas 12 y 13. */
+  servicioProductos?: ServicioProductos
 }
 
 export function armarCaja(opciones: OpcionesCaja = {}) {
@@ -94,6 +97,7 @@ export function armarCaja(opciones: OpcionesCaja = {}) {
       catalogo={opciones.catalogo ?? catalogoDePrueba(opciones.productos)}
       turno={turno}
       leerRanking={leerRanking}
+      productos={opciones.servicioProductos}
       ahora={reloj.ahora}
       pitar={pitar}
       cobro={(s) => {

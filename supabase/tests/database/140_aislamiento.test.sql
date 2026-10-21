@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(36);
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
 select is_empty($$
@@ -15,8 +15,8 @@ select is_empty($$
 -- Las dos de arriba miran el texto, no el comportamiento: cada función nueva suma su nombre acá y su caso de B contra A abajo.
 select set_eq(
   $$ select p.proname::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef $$,
-  $$ values ('abrir_turno'), ('alta_cliente'), ('anular_venta'), ('caja_del_dia'), ('cerrar_turno'), ('confirmar_venta'),
-            ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ventas_del_dia') $$,
+  $$ values ('abrir_turno'), ('alta_cliente'), ('alta_producto_caja'), ('anular_venta'), ('caja_del_dia'), ('cerrar_turno'),
+            ('confirmar_venta'), ('editar_producto'), ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ventas_del_dia') $$,
   'cada función security definer de public tiene su caso de aislamiento en este archivo');
 
 insert into auth.users (id, email) values
@@ -51,7 +51,7 @@ select is(public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a10000
     '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":1,"precio_visto":900}]',
     '[{"medio":"efectivo","importe":900}]', 900, null) ->> 'numero', '1', 'A vende');
 
--- 5 a 23: opera la caja de B
+-- 5 a 25: opera la caja de B
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select is((select count(*)::int from public.ventas), 0, 'B no ve ventas de A');
@@ -91,8 +91,13 @@ select results_eq($$ select nombre, cantidad_ventas from public.ranking_sin_codi
   $$ values ('Bizcochitos B'::text, 0) $$, 'el ranking de B no trae productos ni ventas de A');
 select is(public.caja_del_dia(public.hoy()) ->> 'cobrado', '0', 'la caja del día de B no suma la venta de A');
 select is_empty($$ select numero from public.ventas_del_dia(public.hoy()) $$, 'B no ve ventas de A en ventas_del_dia');
+select throws_ok($$ select public.editar_producto(p_producto_id => 'a2000000-0000-0000-0000-000000000001',
+    p_dispositivo_id => 'b1000000-0000-0000-0000-000000000001', p_precio => 1) $$,
+  'P0001', 'producto_desconocido', 'B no edita productos de A');
+select throws_ok($$ select public.alta_producto_caja('a1000000-0000-0000-0000-000000000001', '7790099', 'Intruso', 100) $$,
+  'P0001', 'dispositivo_desconocido', 'B no da de alta productos con la PC de A');
 
--- 24 a 26: el jefe de B
+-- 26 a 30: el jefe de B
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select is((select count(*)::int from public.ventas), 0, 'el jefe de B, que ve todos los días, tampoco ve ventas de A');
@@ -105,8 +110,13 @@ select throws_ok($$ select public.confirmar_venta('b4000000-0000-0000-0000-00000
     '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":1,"precio_visto":900}]',
     '[{"medio":"efectivo","importe":900}]', 900, null) $$,
   'P0001', 'sin_cuenta', 'una cuenta de B con negocio_id de A en el token no opera en A');
+select throws_ok($$ select public.alta_producto_caja('a1000000-0000-0000-0000-000000000001', '7790099', 'Intruso', 100) $$,
+  'P0001', 'sin_cuenta', 'con negocio_id de A en el token, B no da de alta productos en A');
+select throws_ok($$ select public.editar_producto(p_producto_id => 'a2000000-0000-0000-0000-000000000001',
+    p_dispositivo_id => 'a1000000-0000-0000-0000-000000000001', p_precio => 1) $$,
+  'P0001', 'sin_cuenta', 'con negocio_id de A en el token, B no edita productos de A');
 
--- 27 a 30: nada de A cambió
+-- 31 a 36: nada de A cambió
 reset role;
 select is((select ultimo_numero from public.dispositivos where id = 'a1000000-0000-0000-0000-000000000001'), 1,
   'los intentos de B no tocaron la numeración de A');
@@ -117,6 +127,10 @@ select is((select count(*)::int from public.turnos
            where dispositivo_id = 'a1000000-0000-0000-0000-000000000001' and cierre is null), 1,
   'el turno de A sigue abierto');
 select is((select count(*)::int from public.anulaciones), 0, 'la venta de A sigue sin anular');
+select is((select precio from public.productos where id = 'a2000000-0000-0000-0000-000000000001'), 900,
+  'el producto de A sigue con su precio');
+select is((select count(*)::int from public.productos where negocio_id = 'a0000000-0000-0000-0000-000000000000'), 1,
+  'B no dejó productos en A');
 
 select * from finish();
 rollback;

@@ -2,7 +2,9 @@ import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { crearFiltroDobleLectura } from '../escaner/dobleLectura'
 import { UMBRALES, type Umbrales } from '../escaner/umbrales'
 import { formatearPesos } from '../lib/plata'
-import type { LineaCarrito, ProductoCache } from '../tipos'
+import { AltaRapidaProducto } from '../productos/AltaRapidaProducto'
+import { aProductoCache, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
+import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
 import { PedirApertura } from '../turno/PantallaTurno'
 import type { TurnoAbierto } from '../turno/turno'
 import { pitido } from '../ui/pitido'
@@ -54,6 +56,8 @@ export interface PropsPantallaCaja {
   /** Sólo para tests: sin esto se usa la marca de tiempo de cada evento de teclado. */
   ahora?: () => number
   pitar?: () => void
+  /** Alta rápida ante código inexistente y "Reactivar" ante un desactivado (tarea 15). Sin esto, sólo avisa. */
+  productos?: ServicioProductos
 }
 
 type EstadoTurno =
@@ -70,6 +74,7 @@ export function PantallaCaja({
   umbrales = UMBRALES,
   ahora,
   pitar = pitido,
+  productos,
 }: PropsPantallaCaja) {
   const campo = useRef<HTMLInputElement>(null)
   const [estadoTurno, setEstadoTurno] = useState<EstadoTurno>({ tipo: 'cargando' })
@@ -85,7 +90,13 @@ export function PantallaCaja({
   const [panelAbierto, setPanelAbierto] = useState(false)
   const [ranking, setRanking] = useState<FilaRanking[]>([])
   const [sinCodigo, setSinCodigo] = useState<ProductoCache[]>([])
+  const [altaCodigo, setAltaCodigo] = useState<string | null>(null)
+  const [inactivo, setInactivo] = useState<ProductoCache | null>(null)
+  const [reactivando, setReactivando] = useState(false)
   const cobroAbiertoRef = useRef(false)
+  // Lo que está abierto ahora, para las respuestas que llegan tarde con clausuras viejas.
+  const altaRef = useRef<string | null>(null)
+  const inactivoRef = useRef<ProductoCache | null>(null)
   const consulta = useRef('')
   const pedidoSinCodigo = useRef(0)
   const total = totalCarrito(carrito)
@@ -136,6 +147,18 @@ export function PantallaCaja({
     setCobroAbierto(abierto)
   }
 
+  function ponerAlta(codigo: string | null) {
+    altaRef.current = codigo
+    setAltaCodigo(codigo)
+  }
+
+  function ponerInactivo(producto: ProductoCache | null) {
+    inactivoRef.current = producto
+    setInactivo(producto)
+  }
+
+  const otroAbierto = () => altaRef.current !== null || inactivoRef.current !== null
+
   function limpiarBusqueda() {
     consulta.current = ''
     setTexto('')
@@ -143,10 +166,10 @@ export function PantallaCaja({
     setSeleccion(null)
   }
 
-  function agregar(producto: ProductoCache) {
+  function agregar(producto: ProductoCache, limpiarAviso = true) {
     despachar({ tipo: 'agregar', producto })
     setResaltado(producto.id)
-    setAviso(null)
+    if (limpiarAviso) setAviso(null)
     pitar()
   }
 
@@ -205,6 +228,8 @@ export function PantallaCaja({
     setPanelAbierto(false)
     enfocar()
     if (!filtroLecturas.aceptar({ codigo, t })) return
+    ponerAlta(null)
+    ponerInactivo(null)
     if (cobroAbiertoRef.current) {
       setAviso(AVISO_ESCANEO_EN_COBRO)
       return
@@ -223,13 +248,64 @@ export function PantallaCaja({
     }
     if (!producto) {
       setAviso(`Código ${codigo} no encontrado. Buscalo por nombre.`)
+      if (productos) ponerAlta(codigo)
       return
     }
     if (!producto.activo) {
       setAviso(`${producto.nombre} está desactivado.`)
+      if (productos) ponerInactivo(producto)
       return
     }
     agregar(producto)
+  }
+
+  /**
+   * Producto creado o reactivado por el alta rápida: entra a la venta como cualquier escaneo.
+   * El alta de `codigo` pudo cerrarse mientras guardaba y abrirse otra: esa no se toca.
+   */
+  function altaLista(codigo: string, producto: Producto) {
+    if (altaRef.current === codigo) {
+      ponerAlta(null)
+      enfocar()
+    }
+    // El alta pudo terminar con el cobro ya abierto: el carrito está congelado.
+    if (cobroAbiertoRef.current) {
+      setAviso(AVISO_ESCANEO_EN_COBRO)
+      return
+    }
+    agregar(aProductoCache(producto), !otroAbierto())
+  }
+
+  function altaYaCargada(codigo: string) {
+    if (altaRef.current === codigo) {
+      ponerAlta(null)
+      enfocar()
+    }
+    if (!otroAbierto()) setAviso(MENSAJES_ERROR_PRODUCTO.codigo_existente)
+  }
+
+  /** Con el alta de `codigo` todavía abierta, su propio error alcanza; cerrada, el producto se perdería sin aviso. */
+  function altaFallida(codigo: string, error: unknown) {
+    if (altaRef.current !== codigo) {
+      setAviso(`No se pudo guardar ${codigo}: no se agregó a la venta. ${mensajeErrorProducto(error)}`)
+    }
+  }
+
+  async function reactivar(producto: ProductoCache) {
+    // Decisión 13: el foco vuelve al campo ya, no al terminar; si no, un escaneo durante la espera se pierde.
+    enfocar()
+    if (!productos || reactivando) return
+    setReactivando(true)
+    try {
+      const reactivado = await productos.editar(producto.id, { activo: true })
+      if (inactivoRef.current?.id === producto.id) ponerInactivo(null)
+      if (cobroAbiertoRef.current) setAviso(AVISO_ESCANEO_EN_COBRO)
+      else agregar(aProductoCache(reactivado), !otroAbierto())
+    } catch {
+      setAviso(`No se pudo reactivar ${producto.nombre}. Probá de nuevo.`)
+    } finally {
+      setReactivando(false)
+    }
   }
 
   function elegir(producto: ProductoCache) {
@@ -268,6 +344,8 @@ export function PantallaCaja({
     if (carrito.lineas.length === 0) return
     limpiarBusqueda()
     setPanelAbierto(false)
+    ponerAlta(null)
+    ponerInactivo(null)
     ponerCobro(true)
   }
 
@@ -326,6 +404,34 @@ export function PantallaCaja({
       <p role="status" className={aviso ? 'aviso' : undefined}>
         {aviso}
       </p>
+      {inactivo && productos && (
+        <p className="reactivar">
+          <button type="button" disabled={reactivando} onClick={() => void reactivar(inactivo)}>
+            Reactivar {inactivo.nombre}
+          </button>
+        </p>
+      )}
+      {altaCodigo !== null && productos && (
+        <AltaRapidaProducto
+          key={altaCodigo}
+          codigo={altaCodigo}
+          servicio={productos}
+          alListo={(producto) => altaLista(altaCodigo, producto)}
+          escaner={{
+            umbrales,
+            ahora,
+            // Escaneo de otro código con foco en el formulario: el cajero siguió vendiendo.
+            // escanear() cierra el alta si el filtro de lectura doble acepta la lectura.
+            alEscanear: (codigo, t) => void escanear(codigo, t),
+          }}
+          alCancelar={() => {
+            ponerAlta(null)
+            enfocar()
+          }}
+          alCodigoExistente={() => altaYaCargada(altaCodigo)}
+          alError={(error) => altaFallida(altaCodigo, error)}
+        />
+      )}
       <CampoEscaneo
         campoRef={campo}
         valor={texto}

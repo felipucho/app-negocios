@@ -371,9 +371,9 @@ select results_eq(
 );
 
 select results_eq(
-  $$ select tipo::text from public.historial $$,
-  $$ values ('cambio_precio'::text) $$,
-  'el jefe ve el historial de auditoría'
+  $$ select tipo::text from public.historial order by tipo $$,
+  $$ values ('alta_producto'::text), ('cambio_precio'::text) $$,
+  'el jefe ve el historial de auditoría de su kiosco (el alta de Bizcochitos es de B y no aparece)'
 );
 
 select results_eq(
