@@ -25,7 +25,14 @@ describe('argumentosConfirmar y claveContenido', () => {
 
   it('la clave cambia si cambia el contenido', () => {
     expect(claveContenido(pedido)).toBe(claveContenido({ ...pedido }))
-    expect(claveContenido(pedido)).not.toBe(claveContenido({ ...pedido, efectivoEntregado: 5000 }))
+    expect(claveContenido(pedido)).not.toBe(
+      claveContenido({ ...pedido, pagos: [{ medio: 'efectivo', importe: 800, cliente_id: null }, { medio: 'tarjeta', importe: 1000, cliente_id: null }] }),
+    )
+  })
+
+  it('la entrega en efectivo no es parte de la clave (no se guarda)', () => {
+    expect(claveContenido({ ...pedido, efectivoEntregado: 5000 })).toBe(claveContenido(pedido))
+    expect(claveContenido({ ...pedido, efectivoEntregado: null })).toBe(claveContenido(pedido))
   })
 })
 

@@ -39,3 +39,10 @@ th, td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--color-borde); te
 .panel-sin-codigo { display: grid; gap: 0.5rem; padding: 0.75rem; border: 1px solid var(--color-borde); border-radius: 6px; background: #fff; }
 .panel-sin-codigo__grilla { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(4.5rem, auto); gap: 0.5rem; }
 .panel-sin-codigo__boton { display: grid; align-content: center; gap: 0.25rem; font-size: 1.1rem; }
+
+/* Pagos y comprobante (tarea 14) */
+.pagos, .comprobante { display: grid; gap: 0.6rem; padding: 1rem; border: 1px solid var(--color-borde); border-radius: 6px; background: #fff; }
+.importe { display: grid; grid-template-columns: 12rem 1fr; align-items: center; gap: 0.5rem; }
+.vuelto { font-size: 1.4rem; }
+.problemas { margin: 0; color: #8a1c1c; }
+.selector-cliente ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }

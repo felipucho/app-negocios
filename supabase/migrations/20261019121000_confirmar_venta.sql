@@ -55,12 +55,13 @@ begin
   if jsonb_array_length(p_lineas) > 200 or jsonb_array_length(p_pagos) > 4 then
     raise exception 'pedido_invalido' using errcode = 'P0001';
   end if;
+  -- Sin efectivo_entregado: no se guarda (2026-10-20) y un hash sin sal lo dejaría recuperable.
+  -- Un reintento con otra entrega devuelve la misma venta con el vuelto de esta llamada.
   v_hash := encode(sha256(convert_to(jsonb_build_object(
       'dispositivo_id', p_dispositivo_id,
       'lineas', p_lineas,
       'pagos', p_pagos,
-      'total', p_total,
-      'efectivo_entregado', p_efectivo_entregado
+      'total', p_total
     )::text, 'UTF8')), 'hex');
 
   select * into v_existente from public.ventas v where v.id = p_venta_id;

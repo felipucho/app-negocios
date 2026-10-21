@@ -81,9 +81,14 @@ export function argumentosConfirmar(ventaId: string, p: PedidoVenta): Record<str
   }
 }
 
-/** Mismo texto ⇔ mismo contenido que la base convierte en hash_contenido. Lo usa idVenta. */
+/**
+ * Mismo texto ⇔ mismo contenido que la base convierte en hash_contenido. Lo usa idVenta.
+ * Sin la entrega en efectivo: no es parte de la venta (no se guarda), y cambiarla tras un error
+ * de red no debe generar otro id ni duplicar la venta.
+ */
 export function claveContenido(p: PedidoVenta): string {
-  return JSON.stringify(argumentosConfirmar('', p))
+  const { p_efectivo_entregado: _, ...contenido } = argumentosConfirmar('', p)
+  return JSON.stringify(contenido)
 }
 
 export async function confirmarVenta(rpc: LlamarRpc, ventaId: string, pedido: PedidoVenta): Promise<ResultadoConfirmar> {

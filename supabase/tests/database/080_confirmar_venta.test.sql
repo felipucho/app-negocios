@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(36);
+select plan(37);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'venta-caja@prueba.local'),
@@ -155,6 +155,14 @@ select is(public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a10000
     '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":2,"precio_visto":900}]',
     '[{"medio":"efectivo","importe":1800}]', 1800, 2000) ->> 'ya_existia',
   'true', 'reintento después de un cambio de precio: devuelve la venta grabada, no falla por precio');
+
+-- 30b: la entrega no es parte de la identidad (no se guarda): otra entrega, misma venta, vuelto nuevo
+select is((select r ->> 'venta_id' || '|' || (r ->> 'ya_existia') || '|' || (r ->> 'vuelto')
+    from public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
+      '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":2,"precio_visto":900}]',
+      '[{"medio":"efectivo","importe":1800}]', 1800, 5000) r),
+  'a4000000-0000-0000-0000-000000000001|true|3200',
+  'mismo id con otra entrega: devuelve la misma venta y el vuelto de esa entrega');
 
 -- 31: fiado apagado
 reset role;
