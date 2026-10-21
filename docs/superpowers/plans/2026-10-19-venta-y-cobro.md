@@ -36,6 +36,9 @@ Son las decisiones que el spec no cubre y que tomaron los agentes, más los huec
 - Resto de producto y operación: aceptado como está.
 - Caja abierta en otra pestaña: no se implementa.
 - Cierre remoto (V10): verificar antes del primer kiosco (V52).
+- Vuelto: no se guarda (2026-10-20). Si hace falta, se agrega después con una columna nullable.
+- Prefijos de PC: el check de la tarea 3 ya acepta `^[A-Z]{1,3}$`; la tarea 8 no lo altera (2026-10-20).
+- Venta sin turno: no existe, ni para el jefe. `ventas.turno_id` sigue `not null` (2026-10-20).
 - Supabase: local (Docker) para las tareas 2 a 14, con los tests de base y de integración. Paso a online después de la tarea 14; después siguen los tests online. El acceso (invitación o `supabase link` hecho por Felipe) se define en ese hito.
 
 Siguen abiertos, pero son verificaciones y no decisiones: costos de Supabase Pro y Sentry, rendimiento del ranking, dominio `.com.ar` y consulta con abogado.
@@ -1005,11 +1008,11 @@ create table public.modulos_negocio (
 );
 
 -- El id lo genera el navegador y vive en localStorage. El prefijo lo asigna registrar_dispositivo (tarea 8).
--- Pendiente del spec (sección 14): qué prefijo sigue después de Z. Hoy el check corta en Z.
+-- Después de Z (spec sección 14): AA..ZZ y AAA..ZZZ, como columnas de planilla (tarea 8).
 create table public.dispositivos (
   id uuid primary key,
   negocio_id uuid not null references public.negocios (id),
-  prefijo text not null check (prefijo ~ '^[A-Z]$'),
+  prefijo text not null check (prefijo ~ '^[A-Z]{1,3}$'),
   ultimo_numero integer not null default 0 check (ultimo_numero >= 0),
   creado_por uuid not null,
   creado timestamptz not null default now(),
@@ -2998,9 +3001,6 @@ Expected: FAIL en `040` con `function public.prefijo_dispositivo(integer) does n
 
 `supabase/migrations/20261019120500_registrar_dispositivo.sql`:
 ```sql
--- Prefijo después de Z (spec sección 14), decidido en la parte 2: A..Z, AA..ZZ, AAA..ZZZ.
-alter table public.dispositivos drop constraint dispositivos_prefijo_check;
-alter table public.dispositivos add constraint dispositivos_prefijo_check check (prefijo ~ '^[A-Z]{1,3}$');
 
 -- Orden 1 = A, 26 = Z, 27 = AA, 703 = AAA (numeración biyectiva en base 26).
 create or replace function public.prefijo_dispositivo(p_orden integer)
@@ -4637,7 +4637,7 @@ git commit -m "feat(venta): confirmar_venta idempotente con pruebas de aislamien
 
 | Tema | Decisión | Dónde |
 |---|---|---|
-| Prefijo después de Z (spec sección 14) | A…Z, AA…ZZ, AAA…ZZZ (base 26 biyectiva, como columnas de planilla). PC 27 = `AA`, PC 703 = `AAA`, tope 18.278 por kiosco. El check de `dispositivos.prefijo` pasa de `^[A-Z]$` a `^[A-Z]{1,3}$`. | Tarea 8 |
+| Prefijo después de Z (spec sección 14) | A…Z, AA…ZZ, AAA…ZZZ (base 26 biyectiva, como columnas de planilla). PC 27 = `AA`, PC 703 = `AAA`, tope 18.278 por kiosco. El check de `dispositivos.prefijo` es `^[A-Z]{1,3}$` desde la tarea 3. | Tarea 8 |
 | Totales del cierre de turno | Pagos de las ventas del turno menos los pagos de las ventas anuladas desde esa PC entre la apertura y el cierre (misma regla que la caja del día: resta cuando se anula). | Tarea 8 |
 | Venta e historial | `confirmar_venta` no escribe en `historial` (el spec no lo lista). El alta de clientes tampoco. | Tarea 10 |
 | Hash | `sha256` de `pg_catalog` sobre `jsonb_build_object(dispositivo_id, lineas, pagos, total, efectivo_entregado)::text`, en hex. No usa pgcrypto. | Tarea 10 |
