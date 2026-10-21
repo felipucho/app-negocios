@@ -199,6 +199,14 @@ describe('PantallaPagos', () => {
     expect(await screen.findByRole('heading', { name: 'Venta A-000123' })).toBeInTheDocument()
   })
 
+  it('sesión vencida: pide volver a entrar y no da la venta por hecha', async () => {
+    const vencida: RespuestaRpc = { data: null, error: { message: 'JWT expired', code: 'PGRST303', details: null } }
+    const { user, sesion } = armar({ rpc: rpcCon(vencida) })
+    await user.click(botonConfirmar())
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cerrá la sesión y volvé a entrar')
+    expect(sesion.nuevaVenta).not.toHaveBeenCalled()
+  })
+
   it('error de red: aviso, el carrito queda igual y el reintento usa el mismo id', async () => {
     const { user, rpc, sesion } = armar({ rpc: rpcCon(errorDeRed, confirmada(7)) })
     await user.click(botonConfirmar())

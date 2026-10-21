@@ -15,7 +15,7 @@ describe('PedirApertura', () => {
     render(<PedirApertura alAbrir={alAbrir} />)
     await userEvent.setup().dblClick(screen.getByRole('button', { name: 'Abrir turno' }))
     expect(alAbrir).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Abriendo…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Abriendo…' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('si falla avisa y deja reintentar', async () => {

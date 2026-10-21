@@ -31,7 +31,8 @@ export function PedirApertura({ alAbrir }: { alAbrir: () => Promise<void> }) {
     <section className="turno">
       <h2>No hay turno abierto en esta PC</h2>
       <p>Para vender, abrí el turno. No hace falta contar el efectivo.</p>
-      <button type="button" onClick={() => void abrir()} disabled={abriendo}>
+      {/* aria-disabled y no disabled: un botón con foco que pasa a disabled deja el foco en <body>. abrir() frena el doble clic. */}
+      <button type="button" onClick={() => void abrir()} aria-disabled={abriendo}>
         {abriendo ? 'Abriendo…' : 'Abrir turno'}
       </button>
       {error && (
