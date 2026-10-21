@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import type { CatalogoCaja } from '../caja/catalogoCaja'
 import { PantallaCaja, type SesionCobro } from '../caja/PantallaCaja'
+import type { FilaRanking } from '../caja/ranking'
 import { buscarPorNombre } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
 import type { ProductoCache } from '../tipos'
@@ -69,23 +70,30 @@ export async function tipear(user: Usuario, reloj: Reloj, texto: string) {
   await user.keyboard(texto)
 }
 
-export function armarCaja(
-  opciones: {
-    turnoAbierto?: boolean
-    productos?: readonly ProductoCache[]
-    catalogo?: CatalogoCaja
-    turno?: ReturnType<typeof turnoDePrueba>
-  } = {},
-) {
+export interface OpcionesCaja {
+  turnoAbierto?: boolean
+  productos?: readonly ProductoCache[]
+  catalogo?: CatalogoCaja
+  turno?: ReturnType<typeof turnoDePrueba>
+  /** Respuesta de ranking_sin_codigo; 'falla' simula un error de red. */
+  ranking?: FilaRanking[] | 'falla'
+}
+
+export function armarCaja(opciones: OpcionesCaja = {}) {
   const reloj = relojDePrueba()
   const pitar = vi.fn()
   const turno = opciones.turno ?? turnoDePrueba(opciones.turnoAbierto ?? true)
+  const leerRanking = vi.fn(async (): Promise<FilaRanking[]> => {
+    if (opciones.ranking === 'falla') throw new Error('sin red')
+    return opciones.ranking ?? []
+  })
   const sesiones: SesionCobro[] = []
   const user = userEvent.setup()
   render(
     <PantallaCaja
       catalogo={opciones.catalogo ?? catalogoDePrueba(opciones.productos)}
       turno={turno}
+      leerRanking={leerRanking}
       ahora={reloj.ahora}
       pitar={pitar}
       cobro={(s) => {
@@ -94,5 +102,5 @@ export function armarCaja(
       }}
     />,
   )
-  return { reloj, pitar, turno, sesiones, user }
+  return { reloj, pitar, turno, leerRanking, sesiones, user }
 }

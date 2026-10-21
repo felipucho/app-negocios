@@ -12,6 +12,8 @@ import { CampoEscaneo } from './CampoEscaneo'
 import type { CatalogoCaja } from './catalogoCaja'
 import { LineasVenta } from './LineasVenta'
 import { idSugerencia, ListaSugerencias } from './ListaSugerencias'
+import { PanelSinCodigo } from './PanelSinCodigo'
+import { filtrarPanel, ordenarSinCodigo, type FilaRanking } from './ranking'
 
 /** Un clic en estos conserva su foco; en cualquier otra cosa (texto, filas, espacio vacío), el foco se queda donde estaba. */
 const ENFOCABLES = 'input, textarea, select, button, a[href], [tabindex]'
@@ -45,6 +47,8 @@ export interface SesionCobro {
 export interface PropsPantallaCaja {
   catalogo: CatalogoCaja
   turno: ServicioTurno
+  /** ranking_sin_codigo (tarea 11). La tarea 17 pasa () => leerRankingSinCodigo(supabase). */
+  leerRanking(): Promise<FilaRanking[]>
   cobro(sesion: SesionCobro): ReactNode
   umbrales?: Umbrales
   /** Sólo para tests: sin esto se usa la marca de tiempo de cada evento de teclado. */
@@ -61,6 +65,7 @@ type EstadoTurno =
 export function PantallaCaja({
   catalogo,
   turno,
+  leerRanking,
   cobro,
   umbrales = UMBRALES,
   ahora,
@@ -77,9 +82,14 @@ export function PantallaCaja({
   const [aviso, setAviso] = useState<string | null>(null)
   const [resaltado, setResaltado] = useState<string | null>(null)
   const [cobroAbierto, setCobroAbierto] = useState(false)
+  const [panelAbierto, setPanelAbierto] = useState(false)
+  const [ranking, setRanking] = useState<FilaRanking[]>([])
+  const [sinCodigo, setSinCodigo] = useState<ProductoCache[]>([])
   const cobroAbiertoRef = useRef(false)
   const consulta = useRef('')
+  const pedidoSinCodigo = useRef(0)
   const total = totalCarrito(carrito)
+  const turnoId = estadoTurno.tipo === 'abierto' ? estadoTurno.turno.turnoId : null
 
   function cargarTurno() {
     setEstadoTurno({ tipo: 'cargando' })
@@ -91,6 +101,24 @@ export function PantallaCaja({
 
   // Una sola vez al montar: el turno se lee de la base, nunca del navegador.
   useEffect(cargarTurno, [])
+
+  // El ranking se pide cuando hay turno abierto y queda fijo en memoria durante el turno.
+  useEffect(() => {
+    if (turnoId === null) return
+    let vigente = true
+    leerRanking().then(
+      (filas) => {
+        if (vigente) setRanking(filas)
+      },
+      () => {
+        // Sin ranking, la grilla queda en orden alfabético.
+        if (vigente) setRanking([])
+      },
+    )
+    return () => {
+      vigente = false
+    }
+  }, [turnoId])
 
   // Decisión 13: el campo siempre con foco. Un clic suelto no lo saca; si no, el próximo escaneo se pierde sin aviso.
   useEffect(() => {
@@ -122,11 +150,47 @@ export function PantallaCaja({
     pitar()
   }
 
+  function abrirPanel() {
+    if (cobroAbiertoRef.current) return
+    limpiarBusqueda()
+    setPanelAbierto(true)
+    // Descarta respuestas viejas: abrir, cerrar y reabrir rápido deja dos pedidos en vuelo.
+    const pedido = ++pedidoSinCodigo.current
+    catalogo.sinCodigo().then(
+      (productos) => {
+        if (pedido === pedidoSinCodigo.current) setSinCodigo(productos)
+      },
+      () => {
+        if (pedido === pedidoSinCodigo.current) setSinCodigo([])
+      },
+    )
+    enfocar()
+  }
+
+  function cerrarPanel() {
+    setPanelAbierto(false)
+    limpiarBusqueda()
+    enfocar()
+  }
+
+  function teclaEspecial(tecla: 'Escape' | 'F2') {
+    if (tecla === 'F2') {
+      if (panelAbierto) cerrarPanel()
+      else abrirPanel()
+    } else if (panelAbierto) {
+      cerrarPanel()
+    }
+  }
+
   async function cambiarTexto(valor: string) {
     setTexto(valor)
     setSeleccion(null)
     consulta.current = valor
-    if (cobroAbiertoRef.current) return
+    // Con el panel abierto, el texto filtra la grilla y no busca sugerencias.
+    if (cobroAbiertoRef.current || panelAbierto) {
+      setSugerencias([])
+      return
+    }
     try {
       const encontrados = await catalogo.porNombre(valor)
       // Descarta respuestas viejas: el texto pudo cambiar (o limpiarse por un escaneo) mientras tanto.
@@ -138,6 +202,7 @@ export function PantallaCaja({
 
   async function escanear(codigo: string, t: number) {
     limpiarBusqueda()
+    setPanelAbierto(false)
     enfocar()
     if (!filtroLecturas.aceptar({ codigo, t })) return
     if (cobroAbiertoRef.current) {
@@ -173,15 +238,21 @@ export function PantallaCaja({
     enfocar()
   }
 
+  /** Toque en la grilla: suma 1 y el panel queda abierto. */
+  function tocar(producto: ProductoCache) {
+    agregar(producto)
+    enfocar()
+  }
+
   /** Enter nunca agrega una sugerencia sola: sólo la elegida con flechas. */
   function enter() {
-    if (seleccion === null) return
+    if (panelAbierto || seleccion === null) return
     const producto = sugerencias[seleccion]
     if (producto) elegir(producto)
   }
 
   function mover(paso: 1 | -1) {
-    if (sugerencias.length === 0) return
+    if (panelAbierto || sugerencias.length === 0) return
     setSeleccion((s) =>
       s === null ? (paso === 1 ? 0 : sugerencias.length - 1) : (s + paso + sugerencias.length) % sugerencias.length,
     )
@@ -196,6 +267,7 @@ export function PantallaCaja({
   function abrirCobro() {
     if (carrito.lineas.length === 0) return
     limpiarBusqueda()
+    setPanelAbierto(false)
     ponerCobro(true)
   }
 
@@ -221,6 +293,9 @@ export function PantallaCaja({
     },
     avisar: setAviso,
   }
+
+  const enPanel = panelAbierto ? filtrarPanel(ordenarSinCodigo(ranking, sinCodigo), texto) : []
+  const listaAbierta = !cobroAbierto && !panelAbierto && sugerencias.length > 0
 
   if (estadoTurno.tipo === 'cargando') return <p className="caja-cargando">Cargando…</p>
   if (estadoTurno.tipo === 'error') {
@@ -256,14 +331,27 @@ export function PantallaCaja({
         valor={texto}
         umbrales={umbrales}
         ahora={ahora}
-        listaAbierta={!cobroAbierto && sugerencias.length > 0}
+        listaAbierta={listaAbierta}
         opcionActiva={seleccion !== null && sugerencias[seleccion] ? idSugerencia(sugerencias[seleccion]) : undefined}
         alCambiar={(v) => void cambiarTexto(v)}
         alEscanear={(codigo, t) => void escanear(codigo, t)}
         alEnter={enter}
         alFlecha={mover}
+        alTeclaEspecial={teclaEspecial}
       />
-      {!cobroAbierto && sugerencias.length > 0 && (
+      {!cobroAbierto && (
+        <button
+          type="button"
+          className="boton-sin-codigo"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => teclaEspecial('F2')}
+        >
+          Sin código (F2)
+        </button>
+      )}
+      {panelAbierto && <PanelSinCodigo productos={enPanel} alTocar={tocar} alCerrar={cerrarPanel} />}
+      {listaAbierta && (
         <ListaSugerencias productos={sugerencias} seleccion={seleccion} alElegir={elegir} />
       )}
       {/* Decisión 31: la venta en armado vive sólo en memoria. */}
