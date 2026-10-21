@@ -7,7 +7,7 @@ select tables_are(
   'public',
   array['negocios', 'cuentas', 'config_negocio', 'modulos', 'modulos_negocio', 'dispositivos',
         'productos', 'clientes', 'turnos', 'ventas', 'lineas_venta', 'pagos_venta',
-        'anulaciones', 'historial'],
+        'anulaciones', 'historial', 'version_app'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 
@@ -38,15 +38,19 @@ select is_empty(
        c.relacl, acldefault(case when c.relkind = 'S' then 's' else 'r' end::"char", c.relowner))) a
      where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
        and (a.grantee = 0 or a.grantee in ('anon'::regrole, 'authenticated'::regrole))
-       and not (a.grantee = 'authenticated'::regrole and a.privilege_type = 'SELECT') $$,
-  'anon y PUBLIC no tienen nada en public; authenticated, sólo select (sin MAINTAIN ni TRUNCATE)'
+       and not (a.grantee = 'authenticated'::regrole and a.privilege_type = 'SELECT')
+       -- Única excepción (tarea 18): la versión mínima se lee antes del login.
+       and not (c.relname = 'version_app' and a.grantee = 'anon'::regrole and a.privilege_type = 'SELECT') $$,
+  'anon y PUBLIC no tienen nada en public (salvo select de anon en version_app); authenticated, sólo select (sin MAINTAIN ni TRUNCATE)'
 );
 
 select is_empty(
   $$ select p.oid::regprocedure::text
      from pg_proc p
-     where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'EXECUTE') $$,
-  'anon (ni PUBLIC) no ejecuta ninguna función de public'
+     where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'EXECUTE')
+       -- Única excepción (tarea 18): el chequeo de versión corre antes del login.
+       and p.oid <> 'public.version_minima()'::regprocedure $$,
+  'anon (ni PUBLIC) no ejecuta ninguna función de public (salvo version_minima)'
 );
 
 select ok(

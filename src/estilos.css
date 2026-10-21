@@ -46,3 +46,8 @@ th, td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--color-borde); te
 .vuelto { font-size: 1.4rem; }
 .problemas { margin: 0; color: #8a1c1c; }
 .selector-cliente ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* Personalización y avisos (tarea 18) */
+.kiosco__barra { border-bottom: 4px solid var(--color-primario); }
+.kiosco__logo { height: 2rem; width: auto; }
+.aviso--version { margin: 0; border-radius: 0; text-align: center; }

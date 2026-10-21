@@ -4,6 +4,7 @@ import type { ResultadoLogin, SesionAuth } from '../auth/useSesion'
 import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/servicioCajaDelDia'
 import type { FilaRanking } from '../caja/ranking'
 import type { FilaHistorial } from '../jefe/jefe'
+import type { ConfigNegocio, EstadoAbono } from '../negocio/config'
 import type { ClienteCaja } from '../pagos/clientes'
 import type { Servicios } from '../servicios'
 import type { Cliente } from '../tipos'
@@ -63,7 +64,14 @@ function turnoFalso() {
 }
 
 /** Servicios de la app en memoria. Sin opciones: hay una cuenta caja y no hay sesión abierta. */
-export function serviciosFalsos(opciones: { sesion?: SesionAuth | null; cuenta?: Cuenta | null } = {}) {
+export function serviciosFalsos(
+  opciones: {
+    sesion?: SesionAuth | null
+    cuenta?: Cuenta | null
+    config?: ConfigNegocio | null
+    estadoAbono?: EstadoAbono | null
+  } = {},
+) {
   const productos = servicioProductosFalso()
   const servicios = {
     auth: authFalso(opciones.sesion ?? null),
@@ -102,6 +110,10 @@ export function serviciosFalsos(opciones: { sesion?: SesionAuth | null; cuenta?:
       anonimizarCliente: vi.fn(async (id: string): Promise<Cliente> => ({ id, nombre: 'Cliente suprimido', telefono: null })),
       leerHistorial: vi.fn(async (_desde: number): Promise<FilaHistorial[]> => []),
     },
+    leerConfig: vi.fn(async (): Promise<ConfigNegocio | null> => opciones.config ?? null),
+    leerEstadoAbono: vi.fn(async (): Promise<EstadoAbono | null> =>
+      opciones.estadoAbono !== undefined ? opciones.estadoAbono : 'activo',
+    ),
   } satisfies Servicios
   return servicios
 }

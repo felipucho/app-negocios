@@ -9,6 +9,7 @@ import { borrarCache, sincronizarCatalogo, vaciarCacheAjena, type CacheCatalogo 
 import { crearFuenteSupabase } from './catalogo/fuente'
 import { registrarDispositivo, type Dispositivo } from './dispositivo/dispositivo'
 import { crearServicioJefe, type ServicioJefe } from './jefe/jefe'
+import { leerConfigNegocio, leerEstadoAbonoNegocio, type ConfigNegocio, type EstadoAbono } from './negocio/config'
 import { crearServicioClientes, fiadoActivo, type ServicioClientes } from './pagos/clientes'
 import { crearServicioProductos, type ServicioProductos } from './productos/productos'
 import { abrirTurno, cerrarTurno, leerTurnoAbierto, type CierreTurno } from './turno/turno'
@@ -36,6 +37,8 @@ export interface Servicios {
   productos(dispositivoId: string): ServicioProductos
   cajaDelDia(dispositivoId: string): ServicioCajaDelDia
   jefe: ServicioJefe
+  leerConfig(): Promise<ConfigNegocio | null>
+  leerEstadoAbono(): Promise<EstadoAbono | null>
 }
 
 function crearServicioAuth(supabase: SupabaseClient, claveSesion: string): ServicioAuth {
@@ -94,5 +97,8 @@ export function crearServicios(supabase: SupabaseClient, db: CacheCatalogo, clav
     productos: (id) => crearServicioProductos(supabase, id, alCambiarCatalogo),
     cajaDelDia: (id) => crearServicioCajaDelDia(supabase, id),
     jefe: crearServicioJefe(supabase),
+    // Logos sólo del Supabase del proyecto: es el único origen de imágenes que deja la CSP (tarea 19).
+    leerConfig: () => leerConfigNegocio(supabase, import.meta.env.VITE_SUPABASE_URL),
+    leerEstadoAbono: () => leerEstadoAbonoNegocio(supabase),
   }
 }

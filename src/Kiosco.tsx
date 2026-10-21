@@ -8,6 +8,8 @@ import { Calibracion } from './escaner/Calibracion'
 import { AnonimizarCliente } from './jefe/AnonimizarCliente'
 import { ModuloFiado } from './jefe/ModuloFiado'
 import { PantallaHistorial } from './jefe/PantallaHistorial'
+import { AvisoAbono } from './negocio/AvisoAbono'
+import { aplicarConfig, type ConfigNegocio, type EstadoAbono } from './negocio/config'
 import { PantallaPagos } from './pagos/PantallaPagos'
 import { PantallaProductos } from './productos/PantallaProductos'
 import type { Servicios } from './servicios'
@@ -38,12 +40,14 @@ export interface PropsKiosco {
   alCerrarSesion(): void
 }
 
-/** Un kiosco logueado: registra la PC, programa la caché y arma las pantallas según el rol. */
+/** Un kiosco logueado: registra la PC, programa la caché, aplica la config y arma las pantallas según el rol. */
 export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
   const [dispositivo, setDispositivo] = useState<Dispositivo | null>(null)
   const [errorPc, setErrorPc] = useState(false)
   // null: todavía no se pudo leer de la base.
   const [fiado, setFiado] = useState<boolean | null>(null)
+  const [config, setConfig] = useState<ConfigNegocio | null>(null)
+  const [estadoAbono, setEstadoAbono] = useState<EstadoAbono | null>(null)
   const [seccion, setSeccion] = useState<Seccion>('caja')
   const [vueltaCaja, setVueltaCaja] = useState(0)
   const [confirmarCierre, setConfirmarCierre] = useState(false)
@@ -72,6 +76,14 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
       leido = true
     })
   }, [servicios])
+  useEffect(() => {
+    // Sin config (o sin red), queda la pantalla genérica: no es un error para el cajero.
+    servicios.leerConfig().then(setConfig, () => setConfig(null))
+    // Sólo aviso: si no se puede leer, no se muestra nada y la caja sigue igual.
+    servicios.leerEstadoAbono().then(setEstadoAbono, () => setEstadoAbono(null))
+  }, [servicios])
+  // Al salir del kiosco (cerrar sesión), la vuelta atrás deja la pantalla de entrada genérica (decisión 23).
+  useEffect(() => (config ? aplicarConfig(config) : undefined), [config])
 
   const porPc = useMemo(
     () =>
@@ -121,6 +133,8 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
   return (
     <div className="kiosco">
       <header className="kiosco__barra">
+        {config?.logoUrl && <img className="kiosco__logo" src={config.logoUrl} alt="" />}
+        {config && <strong className="kiosco__nombre">{config.nombreVisible}</strong>}
         <span>
           {esJefe ? 'Jefe' : 'Caja'} · PC {dispositivo.prefijo}
         </span>
@@ -144,6 +158,7 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
         <button type="button" onClick={alCerrarSesion}>
           Cerrar sesión
         </button>
+        <AvisoAbono estado={estadoAbono} />
       </header>
 
       {confirmarCierre && (

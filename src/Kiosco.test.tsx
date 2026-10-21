@@ -166,4 +166,26 @@ describe('Kiosco', () => {
     await user.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
     expect(alCerrarSesion).toHaveBeenCalledTimes(1)
   })
+
+  it('aplica la config visual del negocio después del login y la quita al salir', async () => {
+    const servicios = serviciosFalsos({
+      config: { nombreVisible: 'Kiosco Don Beto', logoUrl: null, colorPrimario: '#aa3300' },
+    })
+    const { unmount } = render(<Kiosco servicios={servicios} cuenta={CUENTA_CAJA} alCerrarSesion={vi.fn()} />)
+    expect(await screen.findByText('Kiosco Don Beto')).toBeInTheDocument()
+    expect(document.documentElement.style.getPropertyValue('--color-primario')).toBe('#aa3300')
+    unmount()
+    expect(document.documentElement.style.getPropertyValue('--color-primario')).toBe('')
+  })
+
+  it('abono suspendido: avisa y no bloquea la venta', async () => {
+    const { user } = armar(CUENTA_CAJA, serviciosFalsos({ estadoAbono: 'suspendido' }))
+    expect(await screen.findByText(/El abono de este kiosco está suspendido/)).toBeInTheDocument()
+    const abrir = await screen.findByRole('button', { name: 'Abrir turno' })
+    expect(abrir).toBeEnabled()
+    await user.click(abrir)
+    expect(await screen.findByLabelText('Escanear o buscar')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Sin código (F2)' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cerrar turno' })).toBeEnabled()
+  })
 })
