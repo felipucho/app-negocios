@@ -1,0 +1,175 @@
+import { screen, waitFor, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { armarCaja, catalogoDePrueba, escanear, tipear, turnoDePrueba, type Usuario } from '../test/caja'
+
+async function campoListo(user: Usuario) {
+  const campo = await screen.findByLabelText('Escanear o buscar')
+  await user.click(campo)
+  return campo
+}
+
+const fila = (nombre: string) => screen.getByRole('row', { name: new RegExp(nombre) })
+
+describe('PantallaCaja', () => {
+  it('un escaneo agrega el producto, lo resalta, pita y limpia el campo', async () => {
+    const { user, reloj, pitar } = armarCaja()
+    const campo = await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toHaveClass('linea--nueva')
+    expect(pitar).toHaveBeenCalledTimes(1)
+    expect(campo).toHaveValue('')
+    expect(campo).toHaveFocus()
+  })
+
+  it('un código con letras escaneado agrega; tipeado a mano va a la búsqueda por nombre', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await tipear(user, reloj, 'ABC-55{Enter}')
+    expect(screen.queryByRole('table', { name: 'Venta' })).toBeNull()
+    expect(campo).toHaveValue('ABC-55')
+    await user.clear(campo)
+    await escanear(user, reloj, 'ABC-55')
+    expect(await screen.findByRole('row', { name: /Agua mineral/ })).toBeInTheDocument()
+  })
+
+  it('Enter con la lista abierta no agrega nada; flechas y Enter eligen', async () => {
+    const { user, reloj } = armarCaja()
+    await campoListo(user)
+    await tipear(user, reloj, 'alf')
+    const lista = await screen.findByRole('listbox', { name: 'Sugerencias' })
+    expect(within(lista).getAllByRole('option')).toHaveLength(2)
+    await tipear(user, reloj, '{Enter}')
+    expect(screen.queryByRole('table', { name: 'Venta' })).toBeNull()
+    await tipear(user, reloj, '{ArrowDown}{Enter}')
+    expect(await screen.findByRole('row', { name: /Alfajor simple/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('un escaneo con la lista abierta gana: cierra la lista y agrega el código', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await tipear(user, reloj, 'alf')
+    await screen.findByRole('listbox', { name: 'Sugerencias' })
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
+    expect(screen.queryByRole('row', { name: /Alfajor simple/ })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+    expect(campo).toHaveValue('')
+  })
+
+  it('con el cobro abierto un escaneo se ignora y avisa', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    await user.click(screen.getByRole('button', { name: 'Cobrar $900' }))
+    expect(screen.getByText('Cobro abierto')).toBeInTheDocument()
+    await user.click(campo)
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('status')).toHaveTextContent('el escaneo no se agregó')
+    expect(within(fila('Alfajor triple')).getByText('1')).toBeInTheDocument()
+  })
+
+  it('+ y − cambian la cantidad; con − en 1 la línea se quita y el foco vuelve al campo', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    await user.click(screen.getByRole('button', { name: 'Sumar uno a Alfajor triple' }))
+    expect(within(fila('Alfajor triple')).getByText('2')).toBeInTheDocument()
+    expect(campo).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Restar uno a Alfajor triple' }))
+    await user.click(screen.getByRole('button', { name: 'Restar uno a Alfajor triple' }))
+    expect(screen.queryByRole('row', { name: /Alfajor triple/ })).toBeNull()
+    expect(campo).toHaveFocus()
+  })
+
+  it('un código inexistente avisa y no agrega', async () => {
+    const { user, reloj } = armarCaja()
+    await campoListo(user)
+    await escanear(user, reloj, '0000000')
+    expect(await screen.findByRole('status')).toHaveTextContent('Código 0000000 no encontrado')
+    expect(screen.queryByRole('table', { name: 'Venta' })).toBeNull()
+  })
+
+  it('explica qué hacer tras F5: la venta sin confirmar se pierde y hay que revisar las ventas de hoy', async () => {
+    armarCaja()
+    await screen.findByLabelText('Escanear o buscar')
+    expect(screen.getByText(/F5/)).toHaveTextContent('revisá las ventas de hoy')
+  })
+
+  it('un clic en texto no le saca el foco al campo: el escaneo siguiente entra', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await user.click(screen.getByText(/F5/))
+    expect(campo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
+  })
+
+  it('Tab no le saca el foco al campo: el escaneo siguiente entra', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await user.tab()
+    expect(campo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
+  })
+
+  it('un producto desactivado escaneado avisa y no agrega', async () => {
+    const { user, reloj, pitar } = armarCaja()
+    await campoListo(user)
+    await escanear(user, reloj, '7790008')
+    expect(await screen.findByRole('status')).toHaveTextContent('Turrón viejo está desactivado')
+    expect(screen.queryByRole('table', { name: 'Venta' })).toBeNull()
+    expect(pitar).not.toHaveBeenCalled()
+  })
+
+  it('un clic en una sugerencia la agrega y deja el foco en el campo', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    await tipear(user, reloj, 'alf')
+    await user.click(await screen.findByRole('option', { name: /Alfajor simple/ }))
+    expect(await screen.findByRole('row', { name: /Alfajor simple/ })).toBeInTheDocument()
+    expect(campo).toHaveFocus()
+  })
+
+  it('una lectura doble del mismo código (menos de 150 ms) agrega una sola unidad', async () => {
+    const { user, reloj, pitar } = armarCaja()
+    await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    // Sin pausa previa: el reloj sigue a 5 ms por tecla, el segundo Enter llega ~40 ms después.
+    await user.keyboard('7790001{Enter}')
+    await waitFor(() => expect(pitar).toHaveBeenCalledTimes(1))
+    expect(within(fila('Alfajor triple')).getByText('1')).toBeInTheDocument()
+  })
+
+  it('si falla la búsqueda por código avisa y no agrega', async () => {
+    const catalogo = { ...catalogoDePrueba(), porCodigo: vi.fn(async () => Promise.reject(new Error('idb'))) }
+    const { user, reloj } = armarCaja({ catalogo })
+    await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('status')).toHaveTextContent('No se pudo buscar el código')
+    expect(screen.queryByRole('table', { name: 'Venta' })).toBeNull()
+  })
+
+  it('si no se puede leer el turno avisa y Reintentar vuelve a leerlo', async () => {
+    const turno = turnoDePrueba(true)
+    turno.leer.mockRejectedValueOnce(new Error('red'))
+    const { user } = armarCaja({ turno })
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer el turno')
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByLabelText('Escanear o buscar')).toBeInTheDocument()
+    expect(turno.leer).toHaveBeenCalledTimes(2)
+  })
+
+  it('sin turno abierto no vende: pide abrir el turno', async () => {
+    const { user, turno } = armarCaja({ turnoAbierto: false })
+    expect(await screen.findByRole('heading', { name: 'No hay turno abierto en esta PC' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Escanear o buscar')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    expect(await screen.findByLabelText('Escanear o buscar')).toBeInTheDocument()
+    expect(turno.abrir).toHaveBeenCalledTimes(1)
+  })
+})
