@@ -39,6 +39,7 @@ Son las decisiones que el spec no cubre y que tomaron los agentes, más los huec
 - Vuelto: no se guarda (2026-10-20). Si hace falta, se agrega después con una columna nullable.
 - Prefijos de PC: el check de la tarea 3 ya acepta `^[A-Z]{1,3}$`; la tarea 8 no lo altera (2026-10-20).
 - Venta sin turno: no existe, ni para el jefe. `ventas.turno_id` sigue `not null` (2026-10-20).
+- Tarea 16 (2026-10-21): el servicio de caja del día es `src/caja-del-dia/servicioCajaDelDia.ts` (en Windows `cajaDelDia.ts` y `CajaDelDia.tsx` chocan por mayúsculas); el plan ya lo nombra así. La anonimización usa `clientes.listarConTelefono()`, sólo del jefe, para distinguir clientes con el mismo nombre; la caja sigue con `listar()` sin teléfonos.
 - Tarea 14, tras la revisión (2026-10-21): el efectivo entregado sale del `hash_contenido` de `confirmar_venta` y de `claveContenido` en el cliente (no se guarda, y cambiarlo tras un error de red no debe dar otro id ni duplicar la venta). `clientes.listar()` de la caja trae sólo `id` y `nombre`, sin teléfonos. Abierto: `clientes_select` no mira el módulo fiado (con fiado apagado la caja puede leer clientes por PostgREST); no se cambió porque el jefe anonimiza aunque el fiado esté apagado.
 - Tarea 10, tras la revisión de seguridad (2026-10-21): `140_aislamiento.test.sql` suma una prueba (`set_eq`) con la lista exacta de funciones `security definer` de `public`. Las tareas 11, 15 y 16, que agregan funciones `security definer`, suman cada nombre a esa lista y un caso de B contra A en el mismo archivo, además del nombre en la prueba 5 de `150`.
 - Tarea 3, tras la revisión de seguridad (2026-10-20): `rls_base` quita también MAINTAIN y cambia los permisos por defecto de `public` (tablas, secuencias y funciones nuevas no dan nada a `anon` ni a `authenticated`, y las funciones no dan EXECUTE a PUBLIC). Cada objeto nuevo necesita su `grant` explícito; las funciones de las tareas 4 a 18 ya lo traen. `010_rls.test.sql` pasó de 27 a 44 pruebas y cambió su numeración: las tareas 15 y 18 ubican las pruebas por su descripción ("el jefe ve el historial de auditoría", antes la 25; `tables_are`, la 1). La tarea 18 además tiene que exceptuar por nombre `version_app` (select de `anon`) y `version_minima()` (execute de `anon`) en las pruebas de permisos ("anon y PUBLIC no tienen nada en public" y "anon (ni PUBLIC) no ejecuta ninguna función de public").
@@ -10216,7 +10217,7 @@ git commit -m "feat(productos): alta rápida, reactivar, edición de precios e h
 - Create: `supabase/migrations/20261019121700_jefe.sql`
 - Modify: `supabase/tests/database/150_permisos_funciones.test.sql` (prueba 5: suma `anonimizar_cliente` y `cambiar_modulo_fiado`)
 - Create: `src/jefe/jefe.ts`, `src/jefe/ModuloFiado.tsx`, `src/jefe/AnonimizarCliente.tsx`, `src/jefe/PantallaHistorial.tsx`
-- Create: `src/caja-del-dia/cajaDelDia.ts`, `src/caja-del-dia/CajaDelDia.tsx`, `src/caja-del-dia/VentasDelDia.tsx`
+- Create: `src/caja-del-dia/servicioCajaDelDia.ts`, `src/caja-del-dia/CajaDelDia.tsx`, `src/caja-del-dia/VentasDelDia.tsx`
 - Test: `supabase/tests/database/135_jefe.test.sql`, `src/jefe/jefe.test.ts`, `src/jefe/ModuloFiado.test.tsx`, `src/jefe/AnonimizarCliente.test.tsx`, `src/jefe/PantallaHistorial.test.tsx`, `src/caja-del-dia/CajaDelDia.test.tsx`
 
 Reglas (spec secciones 4, 5, 7, 10 y 11; decisiones 16, 17, 18, 29, 39 y 40):
@@ -10593,7 +10594,7 @@ export function crearServicioJefe(supabase: SupabaseClient): ServicioJefe {
 }
 ```
 
-`src/caja-del-dia/cajaDelDia.ts`:
+`src/caja-del-dia/servicioCajaDelDia.ts`:
 ```ts
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Medio } from '../tipos'
@@ -10907,7 +10908,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Rol } from '../tipos'
 import { CajaDelDia } from './CajaDelDia'
-import type { AnulacionHecha, CajaDia, VentaDelDia } from './cajaDelDia'
+import type { AnulacionHecha, CajaDia, VentaDelDia } from './servicioCajaDelDia'
 
 const CAJA: CajaDia = {
   fecha: '2026-10-19',
@@ -11318,7 +11319,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { formatearPesos } from '../lib/plata'
 import { NOMBRE_MEDIO } from '../tipos'
 import { formatearNumeroVenta } from '../venta/confirmar'
-import { MENSAJES_CAJA_DEL_DIA, mensajeCajaDelDia, type ServicioCajaDelDia, type VentaDelDia } from './cajaDelDia'
+import { MENSAJES_CAJA_DEL_DIA, mensajeCajaDelDia, type ServicioCajaDelDia, type VentaDelDia } from './servicioCajaDelDia'
 
 export interface PropsVentasDelDia {
   /** La caja recibe siempre hoy; el jefe, el día que eligió. */
@@ -11465,7 +11466,7 @@ import { useEffect, useState } from 'react'
 import { formatearPesos } from '../lib/plata'
 import type { Rol } from '../tipos'
 import { formatearNumeroVenta } from '../venta/confirmar'
-import { mensajeCajaDelDia, type CajaDia, type ServicioCajaDelDia } from './cajaDelDia'
+import { mensajeCajaDelDia, type CajaDia, type ServicioCajaDelDia } from './servicioCajaDelDia'
 import { VentasDelDia } from './VentasDelDia'
 
 export interface PropsCajaDelDia {
@@ -11944,7 +11945,7 @@ describe('App', () => {
 import { vi } from 'vitest'
 import type { Cuenta } from '../auth/cuenta'
 import type { ResultadoLogin, SesionAuth } from '../auth/useSesion'
-import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/cajaDelDia'
+import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/servicioCajaDelDia'
 import type { FilaRanking } from '../caja/ranking'
 import type { FilaHistorial } from '../jefe/jefe'
 import type { Servicios } from '../servicios'
@@ -12249,7 +12250,7 @@ export function Login({ iniciar }: PropsLogin) {
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { leerCuenta, type Cuenta } from './auth/cuenta'
 import { resultadoLogin, type ServicioAuth } from './auth/useSesion'
-import { crearServicioCajaDelDia, type ServicioCajaDelDia } from './caja-del-dia/cajaDelDia'
+import { crearServicioCajaDelDia, type ServicioCajaDelDia } from './caja-del-dia/servicioCajaDelDia'
 import { crearCatalogoCaja, type CatalogoCaja } from './caja/catalogoCaja'
 import type { ServicioTurno } from './caja/PantallaCaja'
 import { leerRankingSinCodigo, type FilaRanking } from './caja/ranking'
@@ -12719,7 +12720,7 @@ Cambios en pruebas existentes:
 | `src/jefe/ModuloFiado.tsx` | `PropsModuloFiado` (`activo`, `servicio`, `alCambiar`), `ModuloFiado` |
 | `src/jefe/AnonimizarCliente.tsx` | `PropsAnonimizarCliente` (`clientes`, `servicio`), `AnonimizarCliente` |
 | `src/jefe/PantallaHistorial.tsx` | `describirFila`, `PropsPantallaHistorial` (`servicio`), `PantallaHistorial` |
-| `src/caja-del-dia/cajaDelDia.ts` | `TotalesMedios`, `AnulacionDelDia`, `CajaDia`, `VentaDelDia`, `AnulacionHecha`, `ServicioCajaDelDia` (`hoy`, `leerCaja`, `leerVentas`, `anular`), `MENSAJES_CAJA_DEL_DIA`, `mensajeCajaDelDia`, `crearServicioCajaDelDia(supabase, dispositivoId)` |
+| `src/caja-del-dia/servicioCajaDelDia.ts` | `TotalesMedios`, `AnulacionDelDia`, `CajaDia`, `VentaDelDia`, `AnulacionHecha`, `ServicioCajaDelDia` (`hoy`, `leerCaja`, `leerVentas`, `anular`), `MENSAJES_CAJA_DEL_DIA`, `mensajeCajaDelDia`, `crearServicioCajaDelDia(supabase, dispositivoId)` |
 | `src/caja-del-dia/CajaDelDia.tsx` | `PropsCajaDelDia` (`rol`, `servicio`), `CajaDelDia` |
 | `src/caja-del-dia/VentasDelDia.tsx` | `PropsVentasDelDia` (`fecha`, `servicio`, `vuelta`, `alAnular`), `VentasDelDia` |
 | `src/auth/cuenta.ts` | `SIN_CUENTA`, `Cuenta` (`usuarioId`, `negocioId`, `rol`), `leerCuenta(supabase, usuarioId)` |

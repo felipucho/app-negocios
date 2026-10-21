@@ -7,6 +7,8 @@ export type ClienteCaja = Pick<Cliente, 'id' | 'nombre'>
 /** Clientes del fiado. Datos personales de terceros (Ley 25.326): sólo nombre o alias y teléfono. */
 export interface ServicioClientes {
   listar(): Promise<ClienteCaja[]>
+  /** Sólo para el jefe: con el teléfono, para distinguir dos clientes con el mismo nombre antes de anonimizar. */
+  listarConTelefono(): Promise<Cliente[]>
   /** alta_cliente (tarea 9): sólo con el módulo fiado activo. Errores: nombre_invalido, telefono_invalido, fiado_deshabilitado. */
   alta(nombre: string, telefono: string | null): Promise<Cliente>
 }
@@ -29,6 +31,15 @@ export function crearServicioClientes(supabase: SupabaseClient): ServicioCliente
         .order('nombre')
       if (error) throw error
       return data as ClienteCaja[]
+    },
+    async listarConTelefono() {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nombre, telefono')
+        .eq('suprimido', false)
+        .order('nombre')
+      if (error) throw error
+      return data as Cliente[]
     },
     async alta(nombre, telefono) {
       const { data, error } = await supabase.rpc('alta_cliente', { p_nombre: nombre, p_telefono: telefono })

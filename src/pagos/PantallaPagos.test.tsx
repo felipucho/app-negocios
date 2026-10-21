@@ -29,6 +29,7 @@ function sesionDePrueba(): SesionCobro {
 function clientesDePrueba(): ServicioClientes {
   return {
     listar: vi.fn(async () => [JUAN]),
+    listarConTelefono: vi.fn(async () => []),
     alta: vi.fn(async (nombre: string, telefono: string | null) => ({ id: 'cli-2', nombre, telefono })),
   }
 }

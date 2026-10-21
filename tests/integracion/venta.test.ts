@@ -142,6 +142,10 @@ describe('venta completa contra Supabase local', () => {
     expect(venta(await confirmarVenta(rpc, crypto.randomUUID(), pedido)).total).toBe(900)
     // Ley 25.326: el teléfono no vuelve a la caja en la lista.
     expect(await servicio.listar()).toEqual([{ id: cliente.id, nombre: 'Juan del 5to' }])
+    // El jefe sí lo ve, para no anonimizar al Juan equivocado.
+    expect(await crearServicioClientes(kiosco.jefe.cliente).listarConTelefono()).toEqual([
+      { id: cliente.id, nombre: 'Juan del 5to', telefono: '11 5555-1234' },
+    ])
   })
 
   it('dos PCs que se registran a la vez reciben prefijos distintos (V20)', async () => {
