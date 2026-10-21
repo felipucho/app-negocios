@@ -27,7 +27,8 @@ select is_empty($$
 select set_eq($$
   select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE') $$,
-  array['abrir_turno', 'alta_cliente', 'cerrar_turno', 'confirmar_venta', 'registrar_dispositivo'],
+  array['abrir_turno', 'alta_cliente', 'anular_venta', 'caja_del_dia', 'cerrar_turno', 'confirmar_venta',
+        'ranking_sin_codigo', 'registrar_dispositivo', 'ventas_del_dia'],
   'authenticated ejecuta sólo las funciones security definer de la lista');
 
 select ok(not has_function_privilege('anon', 'public.modulo_activo(text)', 'execute'), 'anon no ejecuta modulo_activo');
