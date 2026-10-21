@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { armarCaja, catalogoDePrueba, escanear, tipear, turnoDePrueba, type Usuario } from '../test/caja'
 
@@ -171,5 +171,50 @@ describe('PantallaCaja', () => {
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
     expect(await screen.findByLabelText('Escanear o buscar')).toBeInTheDocument()
     expect(turno.abrir).toHaveBeenCalledTimes(1)
+  })
+
+  it('el id de la venta se mantiene si el carrito no cambió y sale nuevo ante cualquier cambio del carrito', async () => {
+    const { user, reloj, sesiones } = armarCaja()
+    await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    await user.click(screen.getByRole('button', { name: 'Cobrar $900' }))
+    // error_red: la base pudo grabar la venta con este id.
+    const primero = sesiones.at(-1)!.ids.idPara('1 alfajor, efectivo justo')
+    act(() => sesiones.at(-1)!.volver())
+    await user.click(screen.getByRole('button', { name: 'Cobrar $900' }))
+    expect(sesiones.at(-1)!.ids.idPara('1 alfajor, efectivo justo')).toBe(primero)
+
+    // La cajera ve en "ventas de hoy" que se grabó, vacía el carrito y el cliente siguiente lleva lo mismo.
+    act(() => sesiones.at(-1)!.volver())
+    await user.click(screen.getByRole('button', { name: 'Restar uno a Alfajor triple' }))
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    await user.click(screen.getByRole('button', { name: 'Cobrar $900' }))
+    expect(sesiones.at(-1)!.ids.idPara('1 alfajor, efectivo justo')).not.toBe(primero)
+  })
+
+  it('"Cobrar" con la venta vacía no hace nada y no le saca el foco al campo', async () => {
+    const { user, reloj } = armarCaja()
+    const campo = await campoListo(user)
+    const cobrar = screen.getByRole('button', { name: 'Cobrar $0' })
+    expect(cobrar).toHaveAttribute('aria-disabled', 'true')
+    await user.click(cobrar)
+    expect(screen.queryByText('Cobro abierto')).toBeNull()
+    expect(campo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
+  })
+
+  it('con el cobro abierto + y − están bloqueados y no cambian la cantidad', async () => {
+    const { user, reloj } = armarCaja()
+    await campoListo(user)
+    await escanear(user, reloj, '7790001')
+    await screen.findByRole('row', { name: /Alfajor triple/ })
+    await user.click(screen.getByRole('button', { name: 'Cobrar $900' }))
+    const sumar = screen.getByRole('button', { name: 'Sumar uno a Alfajor triple' })
+    expect(sumar).toHaveAttribute('aria-disabled', 'true')
+    await user.click(sumar)
+    expect(within(fila('Alfajor triple')).getByText('1')).toBeInTheDocument()
   })
 })

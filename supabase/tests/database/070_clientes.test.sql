@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(22);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'cli-caja@prueba.local'),
@@ -47,6 +47,26 @@ select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000a","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.alta_cliente('Ajeno', null) $$, 'P0001', 'sin_cuenta',
   'la cuenta de otro negocio no da de alta en este');
+
+-- Teléfono (Ley 25.326): la base no lo da por select, ni a la caja ni al jefe; el jefe lo lee con la función.
+select set_config('request.jwt.claims',
+  '{"sub":"c0000000-0000-0000-0000-00000000000a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
+select throws_ok($$ select telefono from public.clientes $$, '42501', null, 'la caja no lee la columna telefono');
+select throws_ok($$ select * from public.clientes $$, '42501', null, 'select * tampoco trae el teléfono');
+select results_eq($$ select nombre from public.clientes order by nombre $$,
+  $$ values ('Juan del 5to'::text), ('Marta'::text), ('Rosa'::text) $$, 'la caja sí lee los nombres');
+select throws_ok($$ select * from public.clientes_con_telefono() $$, 'P0001', 'solo_jefe',
+  'la caja no usa clientes_con_telefono');
+select set_config('request.jwt.claims',
+  '{"sub":"c0000000-0000-0000-0000-00000000001a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
+select throws_ok($$ select telefono from public.clientes $$, '42501', null, 'el jefe tampoco lee la columna directo');
+select results_eq($$ select nombre, telefono from public.clientes_con_telefono() $$,
+  $$ values ('Juan del 5to'::text, '11 5555-1234'::text), ('Marta'::text, null::text), ('Rosa'::text, null::text) $$,
+  'el jefe lee los teléfonos de su negocio con clientes_con_telefono');
+select set_config('request.jwt.claims',
+  '{"sub":"c0000000-0000-0000-0000-0000000000ff","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
+select throws_ok($$ select * from public.clientes_con_telefono() $$, 'P0001', 'sin_cuenta',
+  'sin cuenta no lee teléfonos');
 
 reset role;
 insert into public.modulos_negocio (negocio_id, modulo, activo) values ('a0000000-0000-0000-0000-000000000000', 'fiado', false);

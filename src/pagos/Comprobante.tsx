@@ -45,7 +45,13 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, umbrales, ahor
     <section className="comprobante" aria-label="Comprobante">
       <h2>Venta {formatearNumeroVenta(venta.prefijo, venta.numero)}</h2>
       <p>{FECHA_HORA.format(new Date(venta.fecha))}</p>
-      {venta.yaExistia && <p className="aviso">Esta venta ya estaba grabada: no se duplicó.</p>}
+      {venta.anulada ? (
+        <p className="aviso" role="alert">
+          Esta venta ya estaba grabada y después se anuló: no cuenta como cobrada. No hay vuelto para dar.
+        </p>
+      ) : (
+        venta.yaExistia && <p className="aviso">Esta venta ya estaba grabada: no se duplicó.</p>
+      )}
       <table aria-label="Productos">
         <tbody>
           {lineas.map((l) => (
@@ -69,9 +75,11 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, umbrales, ahor
         </tbody>
       </table>
       <p>Total {formatearPesos(venta.total)}</p>
-      <p className="vuelto">
-        Vuelto <strong>{formatearPesos(venta.vuelto)}</strong>
-      </p>
+      {!venta.anulada && (
+        <p className="vuelto">
+          Vuelto <strong>{formatearPesos(venta.vuelto)}</strong>
+        </p>
+      )}
       <button type="button" autoFocus onClick={alNuevaVenta} onKeyDown={alTecla}>
         Nueva venta
       </button>

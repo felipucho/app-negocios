@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { normalizar } from '../catalogo/normalizar'
 import type { ClienteCaja, ServicioClientes } from './clientes'
 
@@ -27,6 +27,7 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const campoNombre = useRef<HTMLInputElement>(null)
 
   // Una vez al montar: si el padre recrea el servicio en cada render, no se vuelve a pedir la lista.
   useEffect(() => {
@@ -50,6 +51,7 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
   }
 
   async function darDeAlta() {
+    if (guardando) return
     setGuardando(true)
     setError(null)
     try {
@@ -62,6 +64,7 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
     } catch (e) {
       const codigo = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : ''
       setError(ERRORES_ALTA[codigo] ?? 'No se pudo dar de alta el cliente.')
+      campoNombre.current?.focus()
     } finally {
       setGuardando(false)
     }
@@ -103,22 +106,24 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
         <div className="alta-cliente">
           <label>
             Nombre o alias{' '}
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="off" autoFocus />
+            <input ref={campoNombre} value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="off" autoFocus />
           </label>
           <label>
             Teléfono (opcional){' '}
             <input value={telefono} onChange={(e) => setTelefono(e.target.value)} inputMode="tel" autoComplete="off" />
           </label>
-          <button type="button" onClick={() => void darDeAlta()} disabled={guardando}>
+          {/* aria-disabled y no disabled: un botón con foco que pasa a disabled deja el foco en <body> (decisión 13). */}
+          <button type="button" onClick={() => void darDeAlta()} aria-disabled={guardando}>
             Agregar cliente
           </button>
           <button
             type="button"
             onClick={() => {
+              if (guardando) return
               setAlta(false)
               devolverFoco()
             }}
-            disabled={guardando}
+            aria-disabled={guardando}
           >
             Cancelar
           </button>

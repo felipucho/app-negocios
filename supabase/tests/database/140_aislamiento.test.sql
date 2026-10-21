@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(45);
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
 select is_empty($$
@@ -16,7 +16,7 @@ select is_empty($$
 select set_eq(
   $$ select p.proname::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef $$,
   $$ values ('abrir_turno'), ('alta_cliente'), ('alta_producto_caja'), ('anonimizar_cliente'), ('anular_venta'),
-            ('caja_del_dia'), ('cambiar_modulo_fiado'), ('cerrar_turno'), ('confirmar_venta'), ('editar_producto'),
+            ('caja_del_dia'), ('cambiar_modulo_fiado'), ('cerrar_turno'), ('clientes_con_telefono'), ('confirmar_venta'), ('editar_producto'),
             ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ventas_del_dia') $$,
   'cada función security definer de public tiene su caso de aislamiento en este archivo');
 
@@ -52,7 +52,7 @@ select is(public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a10000
     '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":1,"precio_visto":900}]',
     '[{"medio":"efectivo","importe":900}]', 900, null) ->> 'numero', '1', 'A vende');
 
--- 5 a 25: opera la caja de B
+-- 5 a 26: opera la caja de B
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select is((select count(*)::int from public.ventas), 0, 'B no ve ventas de A');
@@ -90,6 +90,8 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
   'P0001', 'venta_desconocida', 'B no anula una venta de A');
 select results_eq($$ select nombre, cantidad_ventas from public.ranking_sin_codigo() $$,
   $$ values ('Bizcochitos B'::text, 0) $$, 'el ranking de B no trae productos ni ventas de A');
+select throws_ok($$ select * from public.clientes_con_telefono() $$,
+  'P0001', 'solo_jefe', 'la caja de B no lee teléfonos (ni de B ni de A)');
 select is(public.caja_del_dia(public.hoy()) ->> 'cobrado', '0', 'la caja del día de B no suma la venta de A');
 select is_empty($$ select numero from public.ventas_del_dia(public.hoy()) $$, 'B no ve ventas de A en ventas_del_dia');
 select throws_ok($$ select public.editar_producto(p_producto_id => 'a2000000-0000-0000-0000-000000000001',
@@ -98,7 +100,7 @@ select throws_ok($$ select public.editar_producto(p_producto_id => 'a2000000-000
 select throws_ok($$ select public.alta_producto_caja('a1000000-0000-0000-0000-000000000001', '7790099', 'Intruso', 100) $$,
   'P0001', 'dispositivo_desconocido', 'B no da de alta productos con la PC de A');
 
--- 26 a 34: el jefe de B
+-- 27 a 37: el jefe de B
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select is((select count(*)::int from public.ventas), 0, 'el jefe de B, que ve todos los días, tampoco ve ventas de A');
@@ -107,6 +109,8 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
   'P0001', 'venta_desconocida', 'el jefe de B, que anula cualquier día, no anula una venta de A');
 select throws_ok($$ select public.anonimizar_cliente('a5000000-0000-0000-0000-000000000001') $$,
   'P0001', 'cliente_desconocido', 'el jefe de B no anonimiza un cliente de A');
+select results_eq($$ select nombre from public.clientes_con_telefono() $$,
+  $$ values ('Cliente de B'::text) $$, 'clientes_con_telefono del jefe de B no trae clientes de A');
 select is(public.cambiar_modulo_fiado(true) ->> 'activo', 'true', 'el jefe de B prende el fiado de B (A sigue apagado, ver abajo)');
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001b","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
@@ -123,8 +127,10 @@ select throws_ok($$ select public.cambiar_modulo_fiado(true) $$,
   'P0001', 'sin_cuenta', 'con negocio_id de A en el token, B no prende el fiado de A');
 select throws_ok($$ select public.anonimizar_cliente('a5000000-0000-0000-0000-000000000001') $$,
   'P0001', 'sin_cuenta', 'con negocio_id de A en el token, B no anonimiza un cliente de A');
+select throws_ok($$ select * from public.clientes_con_telefono() $$,
+  'P0001', 'sin_cuenta', 'con negocio_id de A en el token, B no lee teléfonos de A');
 
--- 35 a 42: nada de A cambió
+-- 38 a 45: nada de A cambió
 reset role;
 select is((select ultimo_numero from public.dispositivos where id = 'a1000000-0000-0000-0000-000000000001'), 1,
   'los intentos de B no tocaron la numeración de A');

@@ -41,3 +41,8 @@ $$;
 
 revoke all on function public.alta_cliente(text, text) from public, anon, authenticated;
 grant execute on function public.alta_cliente(text, text) to authenticated;
+
+-- El teléfono (Ley 25.326) no se lee por PostgREST: select por columna, sin telefono. El jefe lo lee con
+-- clientes_con_telefono (20261019121700_jefe.sql). Ocultarlo en pantalla no alcanza (spec sección 10).
+revoke select on public.clientes from authenticated;
+grant select (id, negocio_id, nombre, suprimido, creado) on public.clientes to authenticated;

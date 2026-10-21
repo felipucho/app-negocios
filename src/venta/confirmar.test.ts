@@ -39,14 +39,25 @@ describe('argumentosConfirmar y claveContenido', () => {
 describe('confirmarVenta', () => {
   it('devuelve la venta confirmada', async () => {
     const rpc = responde({
-      data: { estado: 'confirmada', venta_id: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 200, ya_existia: false },
+      data: { estado: 'confirmada', venta_id: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 200, ya_existia: false, anulada: false },
       error: null,
     })
     expect(await confirmarVenta(rpc, 'v1', pedido)).toEqual({
       tipo: 'confirmada',
-      venta: { ventaId: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 200, yaExistia: false },
+      venta: { ventaId: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 200, yaExistia: false, anulada: false },
     })
     expect(rpc).toHaveBeenCalledWith('confirmar_venta', argumentosConfirmar('v1', pedido))
+  })
+
+  it('reintento de una venta anulada: la marca llega a la pantalla', async () => {
+    const rpc = responde({
+      data: { estado: 'confirmada', venta_id: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 0, ya_existia: true, anulada: true },
+      error: null,
+    })
+    expect(await confirmarVenta(rpc, 'v1', pedido)).toEqual({
+      tipo: 'confirmada',
+      venta: { ventaId: 'v1', prefijo: 'A', numero: 123, total: 1800, fecha: '2026-10-19T12:00:00Z', vuelto: 0, yaExistia: true, anulada: true },
+    })
   })
 
   it('devuelve las diferencias de precio', async () => {
@@ -72,6 +83,13 @@ describe('confirmarVenta', () => {
       throw new Error('sin red')
     })
     expect(await confirmarVenta(rota, 'v1', pedido)).toEqual({ tipo: 'error_red' })
+  })
+
+  it('un JWT vencido o inválido (PostgREST lo rechaza antes de la función) pide volver a entrar', async () => {
+    for (const code of ['PGRST301', 'PGRST302', 'PGRST303']) {
+      const rpc = responde({ data: null, error: { message: 'JWT expired', code, details: null } })
+      expect(await confirmarVenta(rpc, 'v1', pedido)).toEqual({ tipo: 'sesion_vencida' })
+    }
   })
 
   it('un mensaje que no es un código conocido queda como desconocido', async () => {

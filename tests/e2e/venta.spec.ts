@@ -335,3 +335,34 @@ test('9. dos pestañas de la misma PC confirman a la vez sin repetir número', a
   expect(ventas).toHaveLength(2)
   expect(new Set(ventas.map((v) => v.numero)).size).toBe(2)
 })
+
+/** Escaneo sin enfocar antes: el lector no elige dónde cae, así que prueba dónde quedó el foco (decisión 13). */
+async function escanearSinEnfocar(page: Page, codigo: string): Promise<void> {
+  await page.keyboard.type(codigo)
+  await page.keyboard.press('Enter')
+}
+
+test('10. tocar "Cobrar" con la venta vacía no pierde el escaneo siguiente', async ({ page }) => {
+  await entrar(page, 'caja')
+  await abrirTurno(page)
+  await campo(page).focus()
+  // force: el botón está aria-disabled y Playwright no lo clickea por su cuenta; la cajera sí.
+  await page.getByRole('button', { name: /^Cobrar/ }).click({ force: true })
+  await expect(page.getByRole('region', { name: 'Cobro' })).toHaveCount(0)
+  await escanearSinEnfocar(page, PRODUCTOS_E2E.alfajor.codigo)
+  await expect(lineaVenta(page, 'Alfajor E2E')).toBeVisible()
+})
+
+test('11. tras un error al confirmar, un escaneo se ignora con aviso', async ({ page }) => {
+  await entrar(page, 'caja')
+  await abrirTurno(page)
+  await escanear(page, PRODUCTOS_E2E.alfajor.codigo)
+  const cobro = await cobrar(page)
+  await page.route('**/rest/v1/rpc/confirmar_venta', (route) => route.abort('internetdisconnected'))
+  await cobro.getByRole('button', { name: 'Confirmar' }).click()
+  await expect(cobro.getByRole('alert')).toContainText('No se pudo confirmar')
+  await escanearSinEnfocar(page, PRODUCTOS_E2E.alfajor.codigo)
+  await expect(page.getByText('El cobro está abierto: el escaneo no se agregó.', { exact: false })).toBeVisible()
+  await expect(lineaVenta(page, 'Alfajor E2E')).toContainText('$900')
+  expect(await ventasDeLaPc(await idDeLaPc(page))).toHaveLength(0)
+})

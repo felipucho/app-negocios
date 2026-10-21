@@ -122,6 +122,43 @@ describe('Kiosco', () => {
     expect(campo).not.toHaveFocus()
   })
 
+  it('al volver a la caja con el cobro abierto, el foco que el navegador soltó al ocultarla vuelve al cobro', async () => {
+    const { user } = armar(CUENTA_CAJA)
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await screen.findByRole('combobox', { name: 'Escanear o buscar' })
+    await user.click(screen.getByRole('button', { name: 'Sin código (F2)' }))
+    await user.click(await screen.findByRole('button', { name: /Bizcochos/ }))
+    await user.click(screen.getByRole('button', { name: /^Cobrar/ }))
+    const efectivo = await screen.findByLabelText('Efectivo')
+    await user.click(screen.getByRole('button', { name: 'Productos' }))
+    // Chromium saca el foco de lo que queda oculto (hidden); jsdom no, así que se simula.
+    efectivo.blur()
+    expect(document.body).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Caja' }))
+    expect(efectivo).toHaveFocus()
+  })
+
+  it('tras precios_distintos el kiosco pone al día la caché del catálogo en el momento', async () => {
+    const servicios = serviciosFalsos()
+    vi.mocked(servicios.rpc).mockResolvedValue({
+      data: {
+        estado: 'precios_distintos',
+        diferencias: [{ producto_id: 'x', nombre: 'Bizcochos', precio_visto: 500, precio_actual: 600 }],
+      },
+      error: null,
+    })
+    const { user } = armar(CUENTA_CAJA, servicios)
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await screen.findByRole('combobox', { name: 'Escanear o buscar' })
+    await user.click(screen.getByRole('button', { name: 'Sin código (F2)' }))
+    await user.click(await screen.findByRole('button', { name: /Bizcochos/ }))
+    await user.click(screen.getByRole('button', { name: /^Cobrar/ }))
+    const llamadasAntes = vi.mocked(servicios.sincronizarCatalogo).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }))
+    expect(await screen.findByRole('list', { name: 'Precios que cambiaron' })).toBeInTheDocument()
+    expect(servicios.sincronizarCatalogo).toHaveBeenCalledTimes(llamadasAntes + 1)
+  })
+
   it('si no se pudo leer el módulo fiado, lo dice en vez de mostrarlo apagado y reintenta solo', async () => {
     const servicios = serviciosFalsos()
     servicios.fiadoActivo.mockRejectedValueOnce(new Error('sin red'))
@@ -135,6 +172,28 @@ describe('Kiosco', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     Reflect.deleteProperty(document, 'visibilityState')
     expect(await screen.findByRole('checkbox', { name: 'Fiado activo' })).toBeChecked()
+  })
+
+  it('relee el módulo fiado en cada revisión: ve el cambio de otra PC y, si falla, queda el último valor', async () => {
+    const servicios = serviciosFalsos()
+    const { user } = armar(CUENTA_JEFE, servicios)
+    await user.click(await screen.findByRole('button', { name: 'Módulo fiado' }))
+    expect(await screen.findByRole('checkbox', { name: 'Fiado activo' })).toBeChecked()
+    const revisar = () => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      Reflect.deleteProperty(document, 'visibilityState')
+    }
+
+    servicios.fiadoActivo.mockResolvedValueOnce(false) // el jefe lo apagó desde otra PC
+    revisar()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Fiado activo' })).not.toBeChecked())
+
+    servicios.fiadoActivo.mockRejectedValueOnce(new Error('sin red'))
+    revisar()
+    await waitFor(() => expect(servicios.fiadoActivo).toHaveBeenCalledTimes(3))
+    expect(screen.getByRole('checkbox', { name: 'Fiado activo' })).not.toBeChecked()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('con la caja oculta se puede seleccionar texto con el mouse', async () => {

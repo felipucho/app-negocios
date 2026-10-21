@@ -66,3 +66,33 @@ revoke all on function public.cambiar_modulo_fiado(boolean) from public, anon, a
 grant execute on function public.cambiar_modulo_fiado(boolean) to authenticated;
 revoke all on function public.anonimizar_cliente(uuid) from public, anon, authenticated;
 grant execute on function public.anonimizar_cliente(uuid) to authenticated;
+
+-- Lista para anonimizar: el teléfono distingue dos clientes con el mismo nombre. Es la única lectura
+-- del teléfono: authenticated no tiene select sobre esa columna (20261019120900_clientes.sql).
+create or replace function public.clientes_con_telefono()
+returns table (id uuid, nombre text, telefono text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_negocio uuid := public.negocio_actual();
+  v_rol public.rol_cuenta := public.rol_actual();
+begin
+  if v_rol is null then
+    raise exception 'sin_cuenta' using errcode = 'P0001';
+  end if;
+  if v_rol <> 'jefe' then
+    raise exception 'solo_jefe' using errcode = 'P0001';
+  end if;
+
+  return query
+  select c.id, c.nombre, c.telefono
+  from public.clientes c
+  where c.negocio_id = v_negocio and not c.suprimido
+  order by c.nombre;
+end;
+$$;
+
+revoke all on function public.clientes_con_telefono() from public, anon, authenticated;
+grant execute on function public.clientes_con_telefono() to authenticated;

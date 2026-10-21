@@ -33,11 +33,8 @@ export function crearServicioClientes(supabase: SupabaseClient): ServicioCliente
       return data as ClienteCaja[]
     },
     async listarConTelefono() {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('id, nombre, telefono')
-        .eq('suprimido', false)
-        .order('nombre')
+      // authenticated no tiene select sobre telefono: sólo esta función de la base, y sólo para el jefe.
+      const { data, error } = await supabase.rpc('clientes_con_telefono')
       if (error) throw error
       return data as Cliente[]
     },

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(38);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'venta-caja@prueba.local'),
@@ -157,12 +157,25 @@ select is(public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a10000
   'true', 'reintento después de un cambio de precio: devuelve la venta grabada, no falla por precio');
 
 -- 30b: la entrega no es parte de la identidad (no se guarda): otra entrega, misma venta, vuelto nuevo
-select is((select r ->> 'venta_id' || '|' || (r ->> 'ya_existia') || '|' || (r ->> 'vuelto')
+select is((select r ->> 'venta_id' || '|' || (r ->> 'ya_existia') || '|' || (r ->> 'vuelto') || '|' || (r ->> 'anulada')
     from public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
       '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":2,"precio_visto":900}]',
       '[{"medio":"efectivo","importe":1800}]', 1800, 5000) r),
-  'a4000000-0000-0000-0000-000000000001|true|3200',
+  'a4000000-0000-0000-0000-000000000001|true|3200|false',
   'mismo id con otra entrega: devuelve la misma venta y el vuelto de esa entrega');
+
+-- 30c: grabada, error de red, el jefe la anula, la caja reintenta: avisa que está anulada y no hay vuelto
+reset role;
+insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, motivo) values
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-000000000001', 'Se anuló antes del reintento');
+set local role authenticated;
+select is((select (r ->> 'ya_existia') || '|' || (r ->> 'anulada') || '|' || (r ->> 'vuelto')
+    from public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
+      '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":2,"precio_visto":900}]',
+      '[{"medio":"efectivo","importe":1800}]', 1800, 2000) r),
+  'true|true|0',
+  'reintento de una venta anulada: avisa que está anulada y sin vuelto');
 
 -- 31: fiado apagado
 reset role;

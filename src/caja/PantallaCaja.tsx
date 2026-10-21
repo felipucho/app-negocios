@@ -8,7 +8,7 @@ import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
 import { PedirApertura } from '../turno/PantallaTurno'
 import type { TurnoAbierto } from '../turno/turno'
 import { pitido } from '../ui/pitido'
-import { carritoReducer, carritoVacio, totalCarrito } from '../venta/carrito'
+import { carritoReducer, carritoVacio, totalCarrito, type AccionCarrito } from '../venta/carrito'
 import { crearIdVenta, type GeneradorIdVenta } from '../venta/idVenta'
 import { CampoEscaneo } from './CampoEscaneo'
 import type { CatalogoCaja } from './catalogoCaja'
@@ -81,8 +81,9 @@ export function PantallaCaja({
 }: PropsPantallaCaja) {
   const campo = useRef<HTMLInputElement>(null)
   const [estadoTurno, setEstadoTurno] = useState<EstadoTurno>({ tipo: 'cargando' })
-  const [carrito, despachar] = useReducer(carritoReducer, carritoVacio)
+  const [carrito, despacharCarrito] = useReducer(carritoReducer, carritoVacio)
   const [ids] = useState(() => crearIdVenta())
+  const cobroDiv = useRef<HTMLDivElement>(null)
   const [filtroLecturas] = useState(() => crearFiltroDobleLectura(umbrales.dobleLecturaMs))
   const [texto, setTexto] = useState('')
   const [sugerencias, setSugerencias] = useState<ProductoCache[]>([])
@@ -103,6 +104,13 @@ export function PantallaCaja({
   const consulta = useRef('')
   const pedidoSinCodigo = useRef(0)
   const total = totalCarrito(carrito)
+
+  // Todo cambio del carrito saca id nuevo. Si no, tras un error_red que sí grabó, vaciar y volver a
+  // armar el mismo contenido repetiría el id y la base devolvería la venta vieja (ya_existia).
+  function despachar(accion: AccionCarrito) {
+    ids.reiniciar()
+    despacharCarrito(accion)
+  }
   const turnoId = estadoTurno.tipo === 'abierto' ? estadoTurno.turno.turnoId : null
 
   function cargarTurno() {
@@ -148,9 +156,13 @@ export function PantallaCaja({
   const enfocar = () => campo.current?.focus()
 
   // Al volver a la caja (otra sección, confirmación de cierre) el foco quedó en un botón o en <body>.
-  // Con el cobro o el alta abiertos, no: el foco es del importe o del Nombre.
+  // Con el cobro abierto va a su primer control (importe o "Nueva venta"): ahí un escaneo avisa.
+  // Con el alta abierta, no se toca: el foco es del Nombre.
   useEffect(() => {
-    if (activa && !cobroAbiertoRef.current && altaRef.current === null) enfocar()
+    if (!activa) return
+    if (cobroAbiertoRef.current) {
+      if (!cobroDiv.current?.contains(document.activeElement)) cobroDiv.current?.querySelector<HTMLElement>('input, button')?.focus()
+    } else if (altaRef.current === null) enfocar()
   }, [activa])
 
   function ponerCobro(abierto: boolean) {
@@ -417,7 +429,7 @@ export function PantallaCaja({
       </p>
       {inactivo && productos && (
         <p className="reactivar">
-          <button type="button" disabled={reactivando} onClick={() => void reactivar(inactivo)}>
+          <button type="button" aria-disabled={reactivando} onClick={() => void reactivar(inactivo)}>
             Reactivar {inactivo.nombre}
           </button>
         </p>
@@ -484,12 +496,14 @@ export function PantallaCaja({
           tabIndex={-1}
           onMouseDown={(e) => e.preventDefault()}
           onClick={abrirCobro}
-          disabled={carrito.lineas.length === 0}
+          // aria-disabled y no disabled: el clic en un botón disabled no dispara mousedown (no hay preventDefault)
+          // pero igual deja el foco en <body>, y el próximo escaneo se pierde (decisión 13).
+          aria-disabled={carrito.lineas.length === 0}
         >
           Cobrar {formatearPesos(total)}
         </button>
       )}
-      {cobroAbierto && cobro(sesion)}
+      {cobroAbierto && <div ref={cobroDiv}>{cobro(sesion)}</div>}
     </section>
   )
 }

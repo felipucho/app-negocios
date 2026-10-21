@@ -9,6 +9,7 @@ import type { ClienteCaja } from '../pagos/clientes'
 import type { Servicios } from '../servicios'
 import type { Cliente } from '../tipos'
 import type { CierreTurno, TurnoAbierto } from '../turno/turno'
+import type { RespuestaRpc } from '../venta/confirmar'
 import { catalogoDePrueba } from './caja'
 import { servicioProductosFalso } from './productos'
 
@@ -90,7 +91,7 @@ export function serviciosFalsos(
       listarConTelefono: vi.fn(async (): Promise<Cliente[]> => []),
       alta: vi.fn(async (nombre: string, telefono: string | null): Promise<Cliente> => ({ id: 'c1', nombre, telefono })),
     },
-    rpc: vi.fn(async (_funcion: 'confirmar_venta', _args: Record<string, unknown>) => ({ data: null, error: null })),
+    rpc: vi.fn(async (_funcion: 'confirmar_venta', _args: Record<string, unknown>): Promise<RespuestaRpc> => ({ data: null, error: null })),
     turno: vi.fn((_dispositivoId: string) => turnoFalso()),
     productos: vi.fn((_dispositivoId: string) => productos),
     cajaDelDia: vi.fn((_dispositivoId: string) => ({

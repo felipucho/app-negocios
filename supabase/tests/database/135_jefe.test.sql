@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(24);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'jefe-caja-a@prueba.local'),
@@ -74,7 +74,7 @@ select throws_ok($$ select public.anonimizar_cliente('a5000000-0000-0000-0000-00
   'el jefe de B no anonimiza un cliente de A');
 select is(public.cambiar_modulo_fiado(false) ->> 'activo', 'false', 'el jefe de B apaga el fiado de B');
 
--- 11 y 12: con el fiado de A todavía apagado, el jefe ve sus clientes y anonimiza igual (es pedido de la persona)
+-- 11 a 13: con el fiado de A todavía apagado, el jefe ve sus clientes y anonimiza igual (es pedido de la persona)
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
 select set_eq($$ select id from public.clientes $$,
@@ -82,8 +82,11 @@ select set_eq($$ select id from public.clientes $$,
   'con el fiado apagado, el jefe sigue viendo los clientes de A (y no los de B)');
 select is(public.anonimizar_cliente('a5000000-0000-0000-0000-000000000001') ->> 'nombre', 'Cliente suprimido',
   'con el fiado apagado, el jefe anonimiza un cliente igual');
+select results_eq($$ select id from public.clientes_con_telefono() $$,
+  $$ values ('a5000000-0000-0000-0000-000000000002'::uuid) $$,
+  'clientes_con_telefono no trae al suprimido ni a los clientes de B');
 
--- 13 a 17: el jefe de A, con el fiado prendido de nuevo
+-- 14 a 18: el jefe de A, con el fiado prendido de nuevo
 select is(public.cambiar_modulo_fiado(true) ->> 'activo', 'true', 'el jefe vuelve a prender el fiado');
 select ok(public.modulo_activo('fiado'), 'el cambio aplica sin esperar a que venza el token');
 select throws_ok($$ select public.cambiar_modulo_fiado(null) $$, 'P0001', 'pedido_invalido', 'activo nulo se rechaza');
@@ -92,12 +95,12 @@ select is(public.anonimizar_cliente('a5000000-0000-0000-0000-000000000001') ->> 
 select throws_ok($$ select public.anonimizar_cliente(gen_random_uuid()) $$, 'P0001', 'cliente_desconocido',
   'un cliente inexistente se rechaza');
 
--- 18: sin cuenta
+-- 19: sin cuenta
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-0000000000ff","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.cambiar_modulo_fiado(true) $$, 'P0001', 'sin_cuenta', 'sin cuenta no cambia el módulo');
 
--- 19 a 23: como postgres, qué quedó
+-- 20 a 24: como postgres, qué quedó
 reset role;
 select results_eq(
   $$ select nombre, telefono, suprimido from public.clientes where id = 'a5000000-0000-0000-0000-000000000001' $$,

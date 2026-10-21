@@ -35,7 +35,7 @@ function clientesDePrueba(): ServicioClientes {
 }
 
 const confirmada = (numero: number): RespuestaRpc => ({
-  data: { estado: 'confirmada', venta_id: 'v', prefijo: 'A', numero, total: 1800, fecha: '2026-10-19T15:30:00Z', vuelto: 200, ya_existia: false },
+  data: { estado: 'confirmada', venta_id: 'v', prefijo: 'A', numero, total: 1800, fecha: '2026-10-19T15:30:00Z', vuelto: 200, ya_existia: false, anulada: false },
   error: null,
 })
 const errorDeRed: RespuestaRpc = { data: null, error: { message: 'TypeError: Failed to fetch', code: '', details: '' } }
@@ -53,6 +53,7 @@ function armar(opciones: { rpc?: ReturnType<typeof rpcCon>; fiado?: boolean } = 
   const clientes = clientesDePrueba()
   const rpc = opciones.rpc ?? rpcCon(confirmada(123))
   const reloj = relojDePrueba()
+  const alCambiarPrecios = vi.fn()
   const user = userEvent.setup()
   const { rerender } = render(
     <PantallaPagos
@@ -62,9 +63,10 @@ function armar(opciones: { rpc?: ReturnType<typeof rpcCon>; fiado?: boolean } = 
       clientes={clientes}
       rpc={rpc}
       ahora={reloj.ahora}
+      alCambiarPrecios={alCambiarPrecios}
     />,
   )
-  return { sesion, clientes, rpc, reloj, user, rerender }
+  return { sesion, clientes, rpc, reloj, user, rerender, alCambiarPrecios }
 }
 
 const botonConfirmar = () => screen.getByRole('button', { name: 'Confirmar' })
@@ -76,7 +78,7 @@ describe('PantallaPagos', () => {
     await user.click(screen.getByLabelText('Entrega en efectivo'))
     await tipear(user, reloj, '2000')
     expect(screen.getByText(/Vuelto/)).toHaveTextContent('Vuelto: $200')
-    expect(botonConfirmar()).toBeEnabled()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'false')
   })
 
   it('pagos combinados: un medio vacío propone el saldo restante', async () => {
@@ -94,7 +96,7 @@ describe('PantallaPagos', () => {
     await user.click(screen.getByLabelText('Entrega en efectivo'))
     await tipear(user, reloj, '1000')
     expect(screen.getByText(/Vuelto/)).toHaveTextContent('Vuelto: $200')
-    expect(botonConfirmar()).toBeEnabled()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'false')
   })
 
   it('el saldo propuesto queda seleccionado: tipear un importe lo reemplaza', async () => {
@@ -117,10 +119,10 @@ describe('PantallaPagos', () => {
     await user.clear(screen.getByLabelText('Efectivo'))
     await user.click(screen.getByLabelText('Fiado'))
     expect(screen.getByLabelText('Fiado')).toHaveValue('1800')
-    expect(botonConfirmar()).toBeDisabled()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'true')
     await user.click(await screen.findByRole('button', { name: 'Juan del 5to' }))
     expect(screen.getByText('Juan del 5to')).toBeInTheDocument()
-    expect(botonConfirmar()).toBeEnabled()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'false')
     await user.click(screen.getByRole('button', { name: 'Cambiar cliente' }))
     await user.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
     await user.click(screen.getByLabelText('Nombre o alias'))
@@ -128,7 +130,7 @@ describe('PantallaPagos', () => {
     await user.click(screen.getByRole('button', { name: 'Agregar cliente' }))
     expect(clientes.alta).toHaveBeenCalledWith('Marta', null)
     expect(await screen.findByText('Marta')).toBeInTheDocument()
-    expect(botonConfirmar()).toBeEnabled()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'false')
   })
 
   it('elegir el cliente deja el foco en el cobro: un escaneo después avisa', async () => {
@@ -192,7 +194,7 @@ describe('PantallaPagos', () => {
       boton.click()
     })
     expect(rpc).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Confirmando…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirmando…' })).toHaveAttribute('aria-disabled', 'true')
     await act(async () => soltar(confirmada(123)))
     expect(await screen.findByRole('heading', { name: 'Venta A-000123' })).toBeInTheDocument()
   })
@@ -201,8 +203,8 @@ describe('PantallaPagos', () => {
     const { user, rpc, sesion } = armar({ rpc: rpcCon(errorDeRed, confirmada(7)) })
     await user.click(botonConfirmar())
     const aviso = await screen.findByRole('alert')
-    expect(aviso).toHaveTextContent('tocá Confirmar de nuevo sin cambiar los pagos')
-    expect(aviso).toHaveTextContent('Si tenés que cambiar los pagos, antes revisá las ventas de hoy')
+    expect(aviso).toHaveTextContent('tocá Confirmar de nuevo sin cambiar la venta ni los pagos')
+    expect(aviso).toHaveTextContent('Si tenés que cambiar la venta o los pagos, antes revisá las ventas de hoy')
     expect(sesion.actualizarPrecios).not.toHaveBeenCalled()
     expect(sesion.nuevaVenta).not.toHaveBeenCalled()
     await user.click(botonConfirmar())
@@ -253,6 +255,23 @@ describe('PantallaPagos', () => {
     expect(rpc.mock.calls[1][1].p_venta_id).toBe(rpc.mock.calls[0][1].p_venta_id)
   })
 
+  it('reintento de una venta que el jefe anuló entretanto: avisa que no cuenta como cobrada y no muestra vuelto', async () => {
+    const anulada: RespuestaRpc = {
+      data: { estado: 'confirmada', venta_id: 'v', prefijo: 'A', numero: 7, total: 1800, fecha: '2026-10-19T15:30:00Z', vuelto: 0, ya_existia: true, anulada: true },
+      error: null,
+    }
+    const { user } = armar({ rpc: rpcCon(errorDeRed, anulada) })
+    await user.click(botonConfirmar())
+    await screen.findByRole('alert')
+    await user.click(botonConfirmar())
+    await screen.findByRole('heading', { name: 'Venta A-000007' })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Esta venta ya estaba grabada y después se anuló: no cuenta como cobrada. No hay vuelto para dar.',
+    )
+    expect(screen.queryByText(/Vuelto/)).toBeNull()
+    expect(screen.queryByText('Esta venta ya estaba grabada: no se duplicó.')).toBeNull()
+  })
+
   it('el comprobante muestra número con prefijo y vuelto hasta tocar Nueva venta', async () => {
     const { user, sesion } = armar()
     await user.click(botonConfirmar())
@@ -271,12 +290,73 @@ describe('PantallaPagos', () => {
       },
       error: null,
     }
-    const { user, sesion } = armar({ rpc: rpcCon(preciosDistintos) })
+    const { user, sesion, alCambiarPrecios } = armar({ rpc: rpcCon(preciosDistintos) })
     await user.click(botonConfirmar())
     expect(await screen.findByRole('list', { name: 'Precios que cambiaron' })).toHaveTextContent(
       'Alfajor triple: $900 → $1.000',
     )
     expect(sesion.actualizarPrecios).toHaveBeenCalledWith({ p1: 1000 })
+    // La caché del catálogo se pone al día ya: la venta siguiente no repite el rechazo.
+    expect(alCambiarPrecios).toHaveBeenCalledTimes(1)
+  })
+
+  it('error de red tras tocar Confirmar: el foco vuelve al importe y un escaneo avisa en vez de reintentar', async () => {
+    const { user, reloj, rpc, sesion } = armar({ rpc: rpcCon(errorDeRed) })
+    const efectivo = screen.getByLabelText('Efectivo')
+    // Teclado: Tab hasta Confirmar y Enter, así el botón sí toma el foco.
+    botonConfirmar().focus()
+    reloj.tipeo()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('alert')
+    expect(efectivo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+    expect(rpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('el clic en Confirmar (aun sin poder confirmar) no le saca el foco al importe', async () => {
+    const { user, reloj, rpc, sesion } = armar()
+    const efectivo = screen.getByLabelText('Efectivo')
+    await user.clear(efectivo)
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'true')
+    await user.click(botonConfirmar())
+    expect(rpc).not.toHaveBeenCalled()
+    expect(efectivo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('"Volver a la venta" no hace nada mientras confirma', async () => {
+    let soltar: (r: RespuestaRpc) => void = () => undefined
+    const rpc = vi.fn(
+      (_funcion: string, _args: Record<string, unknown>) =>
+        new Promise<RespuestaRpc>((resolver) => {
+          soltar = resolver
+        }),
+    )
+    const sesion = sesionDePrueba()
+    const user = userEvent.setup()
+    render(<PantallaPagos sesion={sesion} dispositivoId="pc-1" fiadoHabilitado clientes={clientesDePrueba()} rpc={rpc} />)
+    await user.click(botonConfirmar())
+    const volver = screen.getByRole('button', { name: 'Volver a la venta' })
+    expect(volver).toHaveAttribute('aria-disabled', 'true')
+    await user.click(volver)
+    expect(sesion.volver).not.toHaveBeenCalled()
+    await act(async () => soltar(confirmada(5)))
+    await screen.findByRole('heading', { name: 'Venta A-000005' })
+  })
+
+  it('si el alta del cliente falla, el foco vuelve al Nombre y no a <body>', async () => {
+    const { user, reloj, clientes } = armar()
+    vi.mocked(clientes.alta).mockRejectedValueOnce(new Error('nombre_invalido'))
+    await user.clear(screen.getByLabelText('Efectivo'))
+    await user.click(screen.getByLabelText('Fiado'))
+    await user.click(await screen.findByRole('button', { name: 'Nuevo cliente' }))
+    await tipear(user, reloj, 'X')
+    await user.click(screen.getByRole('button', { name: 'Agregar cliente' }))
+    expect(await screen.findByText(/Escribí un nombre o alias válido/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Nombre o alias')).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Agregar cliente' })).toHaveAttribute('aria-disabled', 'false')
   })
 
   it('un escaneo que cae en un importe se ignora y avisa', async () => {

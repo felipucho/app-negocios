@@ -22,6 +22,8 @@ const CODIGOS = {
   total_distinto: true,
 } satisfies Record<ErrorConfirmar, true>
 
+const CODIGOS_JWT = ['PGRST301', 'PGRST302', 'PGRST303']
+
 function esCodigo(m: string): m is ErrorConfirmar {
   return Object.hasOwn(CODIGOS, m)
 }
@@ -42,6 +44,8 @@ export interface VentaConfirmada {
   fecha: string
   vuelto: number
   yaExistia: boolean
+  /** Sólo en un reintento: ya estaba grabada y después la anularon. No es un cobro y el vuelto es 0. */
+  anulada: boolean
 }
 
 export interface DiferenciaPrecio {
@@ -56,6 +60,7 @@ export type ResultadoConfirmar =
   | { tipo: 'precios_distintos'; diferencias: DiferenciaPrecio[] }
   | { tipo: 'rechazada'; codigo: ErrorConfirmar; detalle: string | null }
   | { tipo: 'error_red' }
+  | { tipo: 'sesion_vencida' }
   | { tipo: 'desconocido'; mensaje: string }
 
 export interface RespuestaRpc {
@@ -67,7 +72,7 @@ export interface RespuestaRpc {
 export type LlamarRpc = (funcion: 'confirmar_venta', args: Record<string, unknown>) => PromiseLike<RespuestaRpc>
 
 type Respuesta =
-  | { estado: 'confirmada'; venta_id: string; prefijo: string; numero: number; total: number; fecha: string; vuelto: number; ya_existia: boolean }
+  | { estado: 'confirmada'; venta_id: string; prefijo: string; numero: number; total: number; fecha: string; vuelto: number; ya_existia: boolean; anulada: boolean }
   | { estado: 'precios_distintos'; diferencias: { producto_id: string; nombre: string; precio_visto: number; precio_actual: number }[] }
 
 export function argumentosConfirmar(ventaId: string, p: PedidoVenta): Record<string, unknown> {
@@ -101,6 +106,8 @@ export async function confirmarVenta(rpc: LlamarRpc, ventaId: string, pedido: Pe
   const error = r.error
   if (error) {
     if (!error.code) return { tipo: 'error_red' } // V5: el fetch falló, la venta pudo o no grabarse
+    // JWT vencido o inválido: PostgREST lo rechaza antes de llamar a la función, no se grabó nada.
+    if (CODIGOS_JWT.includes(error.code)) return { tipo: 'sesion_vencida' }
     const codigo = error.message
     return esCodigo(codigo)
       ? { tipo: 'rechazada', codigo, detalle: error.details ?? null }
@@ -128,6 +135,7 @@ export async function confirmarVenta(rpc: LlamarRpc, ventaId: string, pedido: Pe
       fecha: d.fecha,
       vuelto: d.vuelto,
       yaExistia: d.ya_existia,
+      anulada: d.anulada,
     },
   }
 }

@@ -46,6 +46,16 @@ describe('useSesion', () => {
     expect(borrarCache.mock.invocationCallOrder[0]).toBeLessThan(auth.cerrar.mock.invocationCallOrder[0])
   })
 
+  it('si Supabase cierra la sesión solo (token revocado, otra pestaña), también borra la caché', async () => {
+    const auth = authFalso({ usuarioId: 'u-caja' })
+    const borrarCache = vi.fn(async () => undefined)
+    const { result } = renderHook(() => useSesion(auth, borrarCache))
+    await waitFor(() => expect(result.current.estado.tipo).toBe('abierta'))
+    act(() => auth.emitir(null)) // SIGNED_OUT
+    expect(result.current.estado).toEqual({ tipo: 'cerrada' })
+    expect(borrarCache).toHaveBeenCalledTimes(1)
+  })
+
   it('si borrar la caché falla, la sesión se cierra igual', async () => {
     const auth = authFalso({ usuarioId: 'u-caja' })
     const borrarCache = vi.fn(async () => {

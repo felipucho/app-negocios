@@ -49,6 +49,9 @@ export function useSesion(auth: ServicioAuth, borrarCache: () => Promise<void>) 
     // El callback sólo cambia estado: nada de await a Supabase dentro (V39).
     const dejar = auth.alCambiar((s) => {
       if (s && saliendo.current) return
+      // Supabase cerró la sesión solo (token revocado, cuenta deshabilitada, otra pestaña): la caché
+      // se borra igual que con el botón (spec sección 10). Con saliendo, ya la borra cerrarSesion.
+      if (!s && !saliendo.current) borrarCache().catch(() => undefined)
       setEstado((p) => siguiente(p, s))
     })
     auth.sesionActual().then(
@@ -63,7 +66,7 @@ export function useSesion(auth: ServicioAuth, borrarCache: () => Promise<void>) 
       vigente = false
       dejar()
     }
-  }, [auth])
+  }, [auth, borrarCache])
 
   const iniciar = useCallback(
     async (email: string, password: string) => {

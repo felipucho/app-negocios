@@ -30,6 +30,7 @@ declare
   v_entregado bigint;
   v_numero integer;
   v_fecha timestamptz;
+  v_anulada boolean;
 begin
   -- 1. Negocio del token y cuenta en ese negocio (rol leído de cuentas con auth.uid()).
   if v_rol is null then
@@ -72,6 +73,8 @@ begin
     end if;
     select coalesce(sum(pv.importe), 0) into v_efectivo
     from public.pagos_venta pv where pv.venta_id = v_existente.id and pv.medio = 'efectivo';
+    -- Grabada, error de red, anulada desde la caja del día y recién ahí el reintento: no es un cobro, no hay vuelto.
+    v_anulada := exists (select 1 from public.anulaciones a where a.venta_id = v_existente.id);
     return jsonb_build_object(
       'estado', 'confirmada',
       'venta_id', v_existente.id,
@@ -79,8 +82,9 @@ begin
       'numero', v_existente.numero,
       'total', v_existente.total,
       'fecha', v_existente.fecha,
-      'vuelto', greatest(coalesce(p_efectivo_entregado, v_efectivo) - v_efectivo, 0),
-      'ya_existia', true
+      'vuelto', case when v_anulada then 0 else greatest(coalesce(p_efectivo_entregado, v_efectivo) - v_efectivo, 0) end,
+      'ya_existia', true,
+      'anulada', v_anulada
     );
   end if;
 
@@ -223,7 +227,8 @@ begin
     'total', v_total,
     'fecha', v_fecha,
     'vuelto', v_entregado - v_efectivo,
-    'ya_existia', false
+    'ya_existia', false,
+    'anulada', false
   );
 end;
 $$;

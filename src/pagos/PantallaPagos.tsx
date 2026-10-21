@@ -110,6 +110,8 @@ export interface PropsPantallaPagos {
   rpc: LlamarRpc
   umbrales?: Umbrales
   ahora?: () => number
+  /** Tras precios_distintos: pone al día la caché del catálogo ya, no en la próxima revisión; si no, la venta siguiente repite el rechazo. */
+  alCambiarPrecios?: () => void
 }
 
 interface DatosComprobante {
@@ -126,11 +128,13 @@ export function PantallaPagos({
   rpc,
   umbrales = UMBRALES,
   ahora,
+  alCambiarPrecios,
 }: PropsPantallaPagos) {
   const [textos, setTextos] = useState<Record<Medio, string>>(() => ({ ...SIN_IMPORTES, efectivo: String(sesion.total) }))
   const [entrega, setEntrega] = useState('')
   const [cliente, setCliente] = useState<ClienteCaja | null>(null)
   const campoFiado = useRef<HTMLInputElement>(null)
+  const campoPrimero = useRef<HTMLInputElement>(null)
   const [confirmando, setConfirmando] = useState(false)
   const enCurso = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -202,6 +206,8 @@ export function PantallaPagos({
     const r = await confirmarVenta(rpc, ventaId, pedido)
     enCurso.current = false
     setConfirmando(false)
+    // Si no se confirmó, el foco vuelve a un importe: ahí un escaneo avisa; en Confirmar, su Enter reintentaría.
+    if (r.tipo !== 'confirmada') campoPrimero.current?.focus()
 
     switch (r.tipo) {
       case 'confirmada':
@@ -211,6 +217,7 @@ export function PantallaPagos({
       case 'precios_distintos':
         setDiferencias(r.diferencias)
         sesion.actualizarPrecios(Object.fromEntries(r.diferencias.map((d) => [d.productoId, d.precioActual])))
+        alCambiarPrecios?.()
         setError('Cambiaron precios en el catálogo. Revisá el total nuevo y confirmá de nuevo.')
         return
       case 'rechazada':
@@ -223,8 +230,11 @@ export function PantallaPagos({
         return
       case 'error_red':
         setError(
-          'No se pudo confirmar. Revisá la conexión y tocá Confirmar de nuevo sin cambiar los pagos: si la venta ya se había grabado, no se duplica. Si tenés que cambiar los pagos, antes revisá las ventas de hoy: puede que ya esté grabada.',
+          'No se pudo confirmar. Revisá la conexión y tocá Confirmar de nuevo sin cambiar la venta ni los pagos: si la venta ya se había grabado, no se duplica. Si tenés que cambiar la venta o los pagos, antes revisá las ventas de hoy: puede que ya esté grabada.',
         )
+        return
+      case 'sesion_vencida':
+        setError('Se venció la sesión y la venta no se grabó. Cerrá la sesión y volvé a entrar.')
         return
       case 'desconocido':
         console.error('confirmar_venta: error inesperado', r.mensaje) // el detalle no va a la pantalla
@@ -252,7 +262,7 @@ export function PantallaPagos({
       {medios.map((m, i) => (
         <CampoImporte
           key={m}
-          ref={m === 'fiado' ? campoFiado : undefined}
+          ref={m === 'fiado' ? campoFiado : i === 0 ? campoPrimero : undefined}
           etiqueta={NOMBRE_MEDIO[m]}
           valor={textos[m]}
           autoFocus={i === 0}
@@ -308,10 +318,24 @@ export function PantallaPagos({
           {error}
         </p>
       )}
-      <button type="button" onClick={() => void confirmar()} disabled={confirmando || !cobro.valido}>
+      {/* aria-disabled y no disabled: un botón con foco que pasa a disabled deja el foco en <body> y el
+          escaneo siguiente se pierde sin aviso (decisión 13). confirmar() y enCurso frenan el clic.
+          El clic tampoco le saca el foco al importe: un escaneo mientras confirma avisa. */}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => void confirmar()}
+        aria-disabled={confirmando || !cobro.valido}
+      >
         {confirmando ? 'Confirmando…' : 'Confirmar'}
       </button>
-      <button type="button" onClick={sesion.volver} disabled={confirmando}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!enCurso.current) sesion.volver()
+        }}
+        aria-disabled={confirmando}
+      >
         Volver a la venta
       </button>
     </section>

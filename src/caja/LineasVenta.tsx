@@ -5,7 +5,7 @@ export interface PropsLineasVenta {
   lineas: readonly LineaCarrito[]
   /** Producto recién agregado: su línea se resalta. */
   resaltado: string | null
-  /** Con el cobro abierto no se cambian cantidades. */
+  /** Con el cobro abierto no se cambian cantidades. aria-disabled y no disabled: ver el botón Cobrar en PantallaCaja. */
   bloqueada: boolean
   alCambiar(productoId: string, delta: 1 | -1): void
 }
@@ -32,9 +32,9 @@ export function LineasVenta({ lineas, resaltado, bloqueada, alCambiar }: PropsLi
                 type="button"
                 tabIndex={-1}
                 aria-label={`Restar uno a ${l.nombre}`}
-                disabled={bloqueada}
+                aria-disabled={bloqueada}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => alCambiar(l.productoId, -1)}
+                onClick={() => !bloqueada && alCambiar(l.productoId, -1)}
               >
                 −
               </button>
@@ -43,9 +43,9 @@ export function LineasVenta({ lineas, resaltado, bloqueada, alCambiar }: PropsLi
                 type="button"
                 tabIndex={-1}
                 aria-label={`Sumar uno a ${l.nombre}`}
-                disabled={bloqueada}
+                aria-disabled={bloqueada}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => alCambiar(l.productoId, 1)}
+                onClick={() => !bloqueada && alCambiar(l.productoId, 1)}
               >
                 +
               </button>

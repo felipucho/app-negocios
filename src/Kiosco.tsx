@@ -68,13 +68,9 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
   useEffect(() => programarSincronizacion(servicios.sincronizarCatalogo), [servicios])
   useEffect(() => {
     // El módulo lo hace cumplir la base; esto sólo muestra u oculta el medio fiado.
-    // Se reintenta al ritmo de la caché hasta leerlo: un corte de red no lo esconde todo el turno.
-    let leido = false
-    return programarSincronizacion(async () => {
-      if (leido) return
-      setFiado(await servicios.fiadoActivo())
-      leido = true
-    })
+    // Se relee al ritmo de la caché: así las otras PCs ven cuando el jefe lo prende o apaga.
+    // Si falla, queda el último valor leído (un corte de red no lo esconde todo el turno).
+    return programarSincronizacion(async () => setFiado(await servicios.fiadoActivo()))
   }, [servicios])
   useEffect(() => {
     // Sin config (o sin red), queda la pantalla genérica: no es un error para el cajero.
@@ -205,6 +201,9 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
               fiadoHabilitado={fiado === true}
               clientes={servicios.clientes}
               rpc={servicios.rpc}
+              alCambiarPrecios={() => {
+                servicios.sincronizarCatalogo().catch((e) => console.warn('sincronizar catálogo', e))
+              }}
             />
           )}
         />

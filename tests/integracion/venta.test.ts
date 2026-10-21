@@ -142,6 +142,10 @@ describe('venta completa contra Supabase local', () => {
     expect(venta(await confirmarVenta(rpc, crypto.randomUUID(), pedido)).total).toBe(900)
     // Ley 25.326: el teléfono no vuelve a la caja en la lista.
     expect(await servicio.listar()).toEqual([{ id: cliente.id, nombre: 'Juan del 5to' }])
+    // La base lo impone, no sólo la pantalla: ni select de la columna ni la función del jefe.
+    const directo = await kiosco.caja.cliente.from('clientes').select('nombre, telefono')
+    expect(directo.error?.code).toBe('42501')
+    await expect(servicio.listarConTelefono()).rejects.toMatchObject({ message: 'solo_jefe' })
     // El jefe sí lo ve, para no anonimizar al Juan equivocado.
     expect(await crearServicioClientes(kiosco.jefe.cliente).listarConTelefono()).toEqual([
       { id: cliente.id, nombre: 'Juan del 5to', telefono: '11 5555-1234' },
