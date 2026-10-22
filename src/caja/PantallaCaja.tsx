@@ -5,8 +5,8 @@ import { formatearPesos } from '../lib/plata'
 import { AltaRapidaProducto } from '../productos/AltaRapidaProducto'
 import { aProductoCache, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
 import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
-import { PedirApertura } from '../turno/PantallaTurno'
-import type { CierreTurno, TurnoAbierto } from '../turno/turno'
+import { AvisoTurnoCerradoSolo, PedirApertura } from '../turno/PantallaTurno'
+import type { AperturaTurno, CierreTurno, TurnoAbierto } from '../turno/turno'
 import { pitido } from '../ui/pitido'
 import { carritoReducer, carritoVacio, totalCarrito, type AccionCarrito } from '../venta/carrito'
 import { crearIdVenta, type GeneradorIdVenta } from '../venta/idVenta'
@@ -26,7 +26,7 @@ export const AVISO_ESCANEO_EN_COBRO =
 /** Turno de esta PC. La tarea 17 lo arma con leerTurnoAbierto, abrirTurno y leerUltimoTurnoCerrado. */
 export interface ServicioTurno {
   leer(): Promise<TurnoAbierto | null>
-  abrir(): Promise<TurnoAbierto>
+  abrir(): Promise<AperturaTurno>
   ultimoCerrado(): Promise<CierreTurno | null>
 }
 
@@ -82,6 +82,7 @@ export function PantallaCaja({
 }: PropsPantallaCaja) {
   const campo = useRef<HTMLInputElement>(null)
   const [estadoTurno, setEstadoTurno] = useState<EstadoTurno>({ tipo: 'cargando' })
+  const [cerradoSolo, setCerradoSolo] = useState<CierreTurno | null>(null)
   const [carrito, despacharCarrito] = useReducer(carritoReducer, carritoVacio)
   const [ids] = useState(() => crearIdVenta())
   const cobroDiv = useRef<HTMLDivElement>(null)
@@ -416,7 +417,9 @@ export function PantallaCaja({
     return (
       <PedirApertura
         alAbrir={async () => {
-          setEstadoTurno({ tipo: 'abierto', turno: await turno.abrir() })
+          const { turnoCerrado, ...abierto } = await turno.abrir()
+          setCerradoSolo(turnoCerrado)
+          setEstadoTurno({ tipo: 'abierto', turno: abierto })
         }}
         leerUltimoCerrado={turno.ultimoCerrado}
       />
@@ -429,6 +432,7 @@ export function PantallaCaja({
       <p role="status" className={aviso ? 'aviso' : undefined}>
         {aviso}
       </p>
+      {cerradoSolo && <AvisoTurnoCerradoSolo cierre={cerradoSolo} alEntender={() => setCerradoSolo(null)} />}
       {inactivo && productos && (
         <p className="reactivar">
           <button type="button" aria-disabled={reactivando} onClick={() => void reactivar(inactivo)}>

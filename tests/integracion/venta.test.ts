@@ -185,4 +185,20 @@ describe('venta completa contra Supabase local', () => {
     await abrirTurno(cliente, dispositivoId)
     expect(await leerUltimoTurnoCerrado(cliente, dispositivoId)).toEqual(cierre)
   })
+
+  it('abrir con un turno abierto en la PC devuelve el que cerró solo, como el último turno cerrado', async () => {
+    const { kiosco, dispositivoId, alfajor, rpc } = await prepararKiosco('Kiosco turno cerrado solo', false)
+    const cliente = kiosco.caja.cliente
+    const primero = await abrirTurno(cliente, dispositivoId)
+    expect(primero.turnoCerrado).toBeNull()
+    const pedido = pedidoDe(dispositivoId, alfajor, 1, { ...SIN_PAGOS, efectivo: 400, tarjeta: 500 })
+    venta(await confirmarVenta(rpc, crypto.randomUUID(), pedido))
+    const { turnoCerrado } = await abrirTurno(cliente, dispositivoId)
+    expect(turnoCerrado).toMatchObject({
+      turnoId: primero.turnoId,
+      apertura: primero.apertura,
+      totales: { efectivo: 400, transferencia: 0, tarjeta: 500, fiado: 0, cobrado: 900 },
+    })
+    expect(turnoCerrado).toEqual(await leerUltimoTurnoCerrado(cliente, dispositivoId))
+  })
 })

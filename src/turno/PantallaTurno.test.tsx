@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { PedirApertura, ResumenCierre } from './PantallaTurno'
+import { AvisoTurnoCerradoSolo, PedirApertura, ResumenCierre } from './PantallaTurno'
 import type { CierreTurno } from './turno'
 
 const CIERRE: CierreTurno = {
@@ -89,6 +89,18 @@ describe('PedirApertura', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir turno' }))
     expect(alAbrir).toHaveBeenCalledTimes(1)
     aviso.mockRestore()
+  })
+})
+
+describe('AvisoTurnoCerradoSolo', () => {
+  it('muestra el horario y el total por medio de pago del turno cerrado solo; Entendido lo descarta', async () => {
+    const alEntender = vi.fn()
+    render(<AvisoTurnoCerradoSolo cierre={CIERRE} alEntender={alEntender} />)
+    expect(screen.getByRole('heading', { name: 'Se cerró solo el turno anterior de esta PC' })).toBeInTheDocument()
+    expect(screen.getByText(/–/)).toHaveTextContent(/19\/10\/26.*\b8:00.*–.*19\/10\/26.*\b(17|5):00/)
+    totalesALaVista()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Entendido' }))
+    expect(alEntender).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -36,7 +36,7 @@ select ok(not has_function_privilege('anon', 'public.modulo_activo(text)', 'exec
 select ok(not has_function_privilege('authenticated', 'public.prefijo_dispositivo(integer)', 'execute'),
   'prefijo_dispositivo es interna');
 select ok(not has_function_privilege('authenticated', 'public.totales_turno(uuid)', 'execute'),
-  'totales_turno es interna: no filtra por negocio, sólo la llaman cerrar_turno y ultimo_turno_cerrado');
+  'totales_turno es interna: no filtra por negocio, sólo la llaman abrir_turno, cerrar_turno y ultimo_turno_cerrado');
 
 select * from finish();
 rollback;

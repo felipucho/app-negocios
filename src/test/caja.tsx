@@ -8,7 +8,7 @@ import type { ServicioProductos } from '../productos/productos'
 import { buscarPorNombre } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
 import type { ProductoCache } from '../tipos'
-import type { CierreTurno } from '../turno/turno'
+import type { AperturaTurno, CierreTurno } from '../turno/turno'
 
 function producto(id: string, nombre: string, precio: number, codigo_barras: string | null, activo = true): ProductoCache {
   return { id, nombre, precio, codigo_barras, activo, creado_en_caja: false, palabras: palabras(nombre) }
@@ -58,7 +58,7 @@ export function turnoDePrueba(abierto: boolean) {
   const turno = { turnoId: 't1', apertura: '2026-10-19T12:00:00Z' }
   return {
     leer: vi.fn(async () => (abierto ? turno : null)),
-    abrir: vi.fn(async () => turno),
+    abrir: vi.fn(async (): Promise<AperturaTurno> => ({ ...turno, turnoCerrado: null })),
     ultimoCerrado: vi.fn(async (): Promise<CierreTurno | null> => null),
   }
 }

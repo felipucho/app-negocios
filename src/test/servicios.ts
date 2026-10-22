@@ -54,7 +54,7 @@ function turnoFalso() {
   const abierto: TurnoAbierto = { turnoId: 't1', apertura: '2026-10-19T12:00:00Z' }
   return {
     leer: vi.fn(async (): Promise<TurnoAbierto | null> => null),
-    abrir: vi.fn(async () => abierto),
+    abrir: vi.fn(async () => ({ ...abierto, turnoCerrado: null })),
     cerrar: vi.fn(async (): Promise<CierreTurno> => ({
       turnoId: 't1',
       apertura: abierto.apertura,

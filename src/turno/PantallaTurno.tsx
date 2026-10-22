@@ -63,13 +63,37 @@ export function PedirApertura({ alAbrir, leerUltimoCerrado }: PropsPedirApertura
       {ultimo && (
         <>
           <h3>Último turno cerrado</h3>
-          <p>
-            {FECHA_HORA.format(new Date(ultimo.apertura))} – {FECHA_HORA.format(new Date(ultimo.cierre))}
-          </p>
-          <TablaTotales totales={ultimo.totales} />
+          <DetalleCierre cierre={ultimo} />
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * Al abrir, el turno de la PC que la apertura cerró solo: con el nuevo ya abierto, sus totales no se ven en otro lado.
+ * Decisión 13: no le saca el foco al campo de escaneo, ni al aparecer ni con "Entendido".
+ */
+export function AvisoTurnoCerradoSolo({ cierre, alEntender }: { cierre: CierreTurno; alEntender: () => void }) {
+  return (
+    <section className="aviso">
+      <h2>Se cerró solo el turno anterior de esta PC</h2>
+      <DetalleCierre cierre={cierre} />
+      <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={alEntender}>
+        Entendido
+      </button>
+    </section>
+  )
+}
+
+function DetalleCierre({ cierre }: { cierre: CierreTurno }) {
+  return (
+    <>
+      <p>
+        {FECHA_HORA.format(new Date(cierre.apertura))} – {FECHA_HORA.format(new Date(cierre.cierre))}
+      </p>
+      <TablaTotales totales={cierre.totales} />
+    </>
   )
 }
 

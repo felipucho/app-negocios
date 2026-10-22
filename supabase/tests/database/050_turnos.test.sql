@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(27);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'turno-caja@prueba.local'),
@@ -45,7 +45,7 @@ select results_eq(
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
-select is(public.abrir_turno('a1000000-0000-0000-0000-000000000001') ->> 'turno_cerrado_id',
+select is(public.abrir_turno('a1000000-0000-0000-0000-000000000001') -> 'turno_cerrado' ->> 'turno_id',
   (select id::text from public.turnos where cuenta_id = 'c0000000-0000-0000-0000-00000000000a'),
   'abrir con otro abierto cierra el anterior');
 reset role;
@@ -225,6 +225,34 @@ select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-0000000000ff","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.ultimo_turno_cerrado('a1000000-0000-0000-0000-000000000002') $$,
   'P0001', 'sin_cuenta', 'sin cuenta no se lee el último turno cerrado');
+
+-- 26 y 27: abrir_turno devuelve el turno que cerró solo, como cerrar_turno (la caja lo avisa al abrir).
+-- Turno abierto de A3: efectivo 600 + transferencia 250; tarjeta 300 anulada en el mismo turno.
+reset role;
+insert into public.ventas (id, negocio_id, dispositivo_id, cuenta_id, turno_id, numero, total, hash_contenido)
+select v.id, 'a0000000-0000-0000-0000-000000000000', 'a1000000-0000-0000-0000-000000000003',
+       'c0000000-0000-0000-0000-00000000000a', 'a3000000-0000-0000-0000-000000000004', v.numero, v.total, repeat(v.letra, 64)
+from (values ('a4000000-0000-0000-0000-000000000021'::uuid, 1, 850, '4'),
+             ('a4000000-0000-0000-0000-000000000022'::uuid, 2, 300, '5')) v(id, numero, total, letra);
+insert into public.pagos_venta (negocio_id, venta_id, medio, importe) values
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000021', 'efectivo', 600),
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000021', 'transferencia', 250),
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000022', 'tarjeta', 300);
+insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, turno_id, motivo) values
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000022', 'c0000000-0000-0000-0000-00000000000a',
+   'a1000000-0000-0000-0000-000000000003', 'a3000000-0000-0000-0000-000000000004', 'Se cobró mal');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"c0000000-0000-0000-0000-00000000000a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
+select is(public.abrir_turno('a1000000-0000-0000-0000-000000000003') -> 'turno_cerrado',
+  jsonb_build_object('turno_id', 'a3000000-0000-0000-0000-000000000004'::uuid,
+    'apertura', now() - interval '1 hour', 'cierre', now(),
+    'totales', '{"efectivo": 600, "transferencia": 250, "tarjeta": 0, "fiado": 0, "cobrado": 850}'::jsonb),
+  'abrir con otro abierto devuelve el cerrado: apertura, cierre y total por medio, neto de sus anulaciones');
+select public.cerrar_turno('a1000000-0000-0000-0000-000000000003');
+select is(public.abrir_turno('a1000000-0000-0000-0000-000000000003') -> 'turno_cerrado', 'null'::jsonb,
+  'abrir sin turno abierto en la PC no cierra nada: turno_cerrado null');
 
 select * from finish();
 rollback;

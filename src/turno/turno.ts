@@ -32,13 +32,6 @@ export async function leerTurnoAbierto(supabase: SupabaseClient, dispositivoId: 
   return data ? { turnoId: data.id as string, apertura: data.apertura as string } : null
 }
 
-export async function abrirTurno(supabase: SupabaseClient, dispositivoId: string): Promise<TurnoAbierto> {
-  const { data, error } = await supabase.rpc('abrir_turno', { p_dispositivo_id: dispositivoId })
-  if (error) throw error
-  const r = data as { turno_id: string; apertura: string }
-  return { turnoId: r.turno_id, apertura: r.apertura }
-}
-
 type FilaCierre = { turno_id: string; apertura: string; cierre: string; totales: TotalesTurno }
 
 const aCierre = (r: FilaCierre): CierreTurno => ({
@@ -47,6 +40,18 @@ const aCierre = (r: FilaCierre): CierreTurno => ({
   cierre: r.cierre,
   totales: r.totales,
 })
+
+export interface AperturaTurno extends TurnoAbierto {
+  /** El turno abierto de la PC que esta apertura cerró solo, como lo devuelve cerrarTurno. null si no había. */
+  turnoCerrado: CierreTurno | null
+}
+
+export async function abrirTurno(supabase: SupabaseClient, dispositivoId: string): Promise<AperturaTurno> {
+  const { data, error } = await supabase.rpc('abrir_turno', { p_dispositivo_id: dispositivoId })
+  if (error) throw error
+  const r = data as { turno_id: string; apertura: string; turno_cerrado: FilaCierre | null }
+  return { turnoId: r.turno_id, apertura: r.apertura, turnoCerrado: r.turno_cerrado ? aCierre(r.turno_cerrado) : null }
+}
 
 export async function cerrarTurno(supabase: SupabaseClient, dispositivoId: string): Promise<CierreTurno> {
   const { data, error } = await supabase.rpc('cerrar_turno', { p_dispositivo_id: dispositivoId })

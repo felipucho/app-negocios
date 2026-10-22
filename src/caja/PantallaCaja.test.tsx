@@ -10,6 +10,8 @@ async function campoListo(user: Usuario) {
 
 const fila = (nombre: string) => screen.getByRole('row', { name: new RegExp(nombre) })
 
+const AVISO_CERRADO_SOLO = 'Se cerró solo el turno anterior de esta PC'
+
 describe('PantallaCaja', () => {
   it('un escaneo agrega el producto, lo resalta, pita y limpia el campo', async () => {
     const { user, reloj, pitar } = armarCaja()
@@ -169,8 +171,35 @@ describe('PantallaCaja', () => {
     expect(await screen.findByRole('heading', { name: 'No hay turno abierto en esta PC' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Escanear o buscar')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    expect(await screen.findByLabelText('Escanear o buscar')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Escanear o buscar')).toHaveFocus()
     expect(turno.abrir).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('heading', { name: AVISO_CERRADO_SOLO })).toBeNull()
+  })
+
+  it('si abrir cerró solo el turno anterior lo avisa con sus totales, sin sacarle el foco al campo; Entendido lo oculta', async () => {
+    const turno = turnoDePrueba(false)
+    turno.abrir.mockResolvedValueOnce({
+      turnoId: 't2',
+      apertura: '2026-10-19T20:00:00Z',
+      turnoCerrado: {
+        turnoId: 't1',
+        apertura: '2026-10-19T11:00:00Z',
+        cierre: '2026-10-19T20:00:00Z',
+        totales: { efectivo: 900, transferencia: 0, tarjeta: 500, fiado: 0, cobrado: 1400 },
+      },
+    })
+    const { user, reloj } = armarCaja({ turno })
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    const campo = await screen.findByLabelText('Escanear o buscar')
+    const aviso = screen.getByRole('heading', { name: AVISO_CERRADO_SOLO }).closest('section')!
+    expect(within(within(aviso).getByRole('row', { name: /^Efectivo/ })).getByText('$900')).toBeInTheDocument()
+    expect(within(within(aviso).getByRole('row', { name: /^Total cobrado/ })).getByText('$1.400')).toBeInTheDocument()
+    expect(campo).toHaveFocus()
+    await user.click(within(aviso).getByRole('button', { name: 'Entendido' }))
+    expect(screen.queryByRole('heading', { name: AVISO_CERRADO_SOLO })).toBeNull()
+    expect(campo).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
   })
 
   it('el id de la venta se mantiene si el carrito no cambió y sale nuevo ante cualquier cambio del carrito', async () => {

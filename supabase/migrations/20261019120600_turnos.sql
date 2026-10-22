@@ -40,13 +40,20 @@ begin
   insert into public.historial (negocio_id, tipo, cuenta_id, dispositivo_id, entidad, entidad_id)
   values (v_negocio, 'apertura_turno', auth.uid(), p_dispositivo_id, 'turnos', v_nuevo.id);
 
-  return jsonb_build_object('turno_id', v_nuevo.id, 'apertura', v_nuevo.apertura, 'turno_cerrado_id', v_anterior.id);
+  -- El turno cerrado solo, con el formato de cerrar_turno (Felipe, 2026-10-22): con el nuevo ya abierto, la
+  -- pantalla sin turno no llega a mostrarlo y la caja lo avisa al abrir. Sin chequeo de rol: cerró ahora, y
+  -- ultimo_turno_cerrado también se lo muestra a la caja (cierre de hoy).
+  return jsonb_build_object('turno_id', v_nuevo.id, 'apertura', v_nuevo.apertura,
+    'turno_cerrado', case when v_anterior.id is not null then
+      jsonb_build_object('turno_id', v_anterior.id, 'apertura', v_anterior.apertura, 'cierre', v_anterior.cierre,
+                         'totales', public.totales_turno(v_anterior.id))
+    end);
 end;
 $$;
 
 -- Total por medio de pago de un turno. Las anulaciones hechas en ese turno restan (misma regla que la
 -- caja del día: la anulación resta cuando se hace, no cuando se vendió).
--- Sin chequeo de negocio: la llaman cerrar_turno y ultimo_turno_cerrado con un turno ya validado; la app no.
+-- Sin chequeo de negocio: la llaman abrir_turno, cerrar_turno y ultimo_turno_cerrado con un turno ya validado; la app no.
 create or replace function public.totales_turno(p_turno_id uuid)
 returns jsonb
 language sql
