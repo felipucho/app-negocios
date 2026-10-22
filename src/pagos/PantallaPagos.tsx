@@ -249,6 +249,7 @@ export function PantallaPagos({
         lineas={comprobante.lineas}
         pagos={comprobante.pagos}
         alNuevaVenta={sesion.nuevaVenta}
+        alCobrarDeNuevo={sesion.volver}
         umbrales={umbrales}
         ahora={ahora}
         alEscaneo={avisarEscaneo}
@@ -287,6 +288,11 @@ export function PantallaPagos({
       <p className="vuelto">
         Vuelto: <strong>{formatearPesos(cobro.vuelto)}</strong>
       </p>
+      {!fiadoHabilitado && textos.fiado.trim() !== '' && (
+        <p role="alert" className="aviso aviso--error">
+          Se apagó el fiado mientras cobrabas: el importe fiado ya no cuenta. Cobrá el resto con otro medio.
+        </p>
+      )}
       {/* Montado mientras haya texto: editar el importe no relee la lista ni borra la búsqueda. */}
       {fiadoHabilitado && textos.fiado.trim() !== '' && (
         <SelectorCliente

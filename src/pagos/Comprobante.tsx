@@ -17,6 +17,8 @@ export interface PropsComprobante {
   lineas: readonly LineaCarrito[]
   pagos: readonly PagoAEnviar[]
   alNuevaVenta(): void
+  /** Venta anulada en el reintento: vuelve a la venta con el carrito intacto (el id ya salió nuevo). */
+  alCobrarDeNuevo?(): void
   umbrales: Umbrales
   ahora?: () => number
   /** Un escaneo con el comprobante a la vista se ignora y la caja avisa. */
@@ -24,7 +26,7 @@ export interface PropsComprobante {
 }
 
 /** Sólo en pantalla, no se imprime (spec sección 6). El fiado se muestra sin el nombre del cliente. */
-export function Comprobante({ venta, lineas, pagos, alNuevaVenta, umbrales, ahora, alEscaneo }: PropsComprobante) {
+export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuevo, umbrales, ahora, alEscaneo }: PropsComprobante) {
   const pulsaciones = useRef<Pulsacion[]>([])
 
   // El Enter final del escáner caería en "Nueva venta" (tiene el foco): si es un escaneo, no se activa.
@@ -83,6 +85,11 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, umbrales, ahor
       <button type="button" autoFocus onClick={alNuevaVenta} onKeyDown={alTecla}>
         Nueva venta
       </button>
+      {venta.anulada && alCobrarDeNuevo && (
+        <button type="button" onClick={alCobrarDeNuevo}>
+          Cobrarla de nuevo
+        </button>
+      )}
     </section>
   )
 }

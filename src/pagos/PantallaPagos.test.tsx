@@ -280,6 +280,43 @@ describe('PantallaPagos', () => {
     expect(screen.queryByText('Esta venta ya estaba grabada: no se duplicó.')).toBeNull()
   })
 
+  it('venta anulada en el reintento: "Cobrarla de nuevo" vuelve a la venta sin vaciar el carrito', async () => {
+    const anulada: RespuestaRpc = {
+      data: { estado: 'confirmada', venta_id: 'v', prefijo: 'A', numero: 7, total: 1800, fecha: '2026-10-19T15:30:00Z', vuelto: 0, ya_existia: true, anulada: true },
+      error: null,
+    }
+    const { user, sesion } = armar({ rpc: rpcCon(anulada) })
+    await user.click(botonConfirmar())
+    await user.click(await screen.findByRole('button', { name: 'Cobrarla de nuevo' }))
+    expect(sesion.volver).toHaveBeenCalledTimes(1)
+    expect(sesion.nuevaVenta).not.toHaveBeenCalled()
+  })
+
+  it('una venta normal no ofrece "Cobrarla de nuevo"', async () => {
+    const { user } = armar()
+    await user.click(botonConfirmar())
+    await screen.findByRole('heading', { name: 'Venta A-000123' })
+    expect(screen.queryByRole('button', { name: 'Cobrarla de nuevo' })).toBeNull()
+  })
+
+  it('si se apaga el fiado con un importe fiado cargado, avisa que ya no cuenta', async () => {
+    const { user, reloj, sesion, clientes, rpc, rerender, alCambiarPrecios } = armar()
+    await user.click(screen.getByLabelText('Fiado'))
+    await tipear(user, reloj, '500')
+    rerender(
+      <PantallaPagos
+        sesion={sesion}
+        dispositivoId="pc-1"
+        fiadoHabilitado={false}
+        clientes={clientes}
+        rpc={rpc}
+        ahora={reloj.ahora}
+        alCambiarPrecios={alCambiarPrecios}
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Se apagó el fiado mientras cobrabas')
+  })
+
   it('el comprobante muestra número con prefijo y vuelto hasta tocar Nueva venta', async () => {
     const { user, sesion } = armar()
     await user.click(botonConfirmar())
