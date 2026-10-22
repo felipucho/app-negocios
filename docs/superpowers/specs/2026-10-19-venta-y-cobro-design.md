@@ -124,7 +124,7 @@ Nombres de tablas y columnas: orientativos. Lo que importa son las claves, los c
 | `ventas` | `id` (UUID, generado antes de confirmar) | `negocio_id`, `dispositivo_id`, cuenta, `turno_id`, número, fecha, total, `hash_contenido` | El mismo `id` viaja en cada reintento con el carrito y los pagos intactos; cualquier cambio en el carrito, aunque vuelva al mismo contenido, genera uno nuevo. `número` es único por (`negocio_id`, `dispositivo_id`, `número`). `total` y `fecha` los calcula la base. Índice por fecha (lo usa el ranking). |
 | `lineas_venta` | `id` (UUID) | `venta_id`, `producto_id`, cantidad, precio unitario congelado | El precio se congela al confirmar. |
 | `pagos_venta` | `id` (UUID) | `venta_id`, medio (efectivo, transferencia, tarjeta, fiado), importe, `cliente_id` si es fiado | La tarjeta sólo se registra. Fiado exige cliente y módulo activo. `importe` es lo aplicado al total, no lo entregado: la suma de pagos de una venta es igual a su total. El vuelto no se guarda; se calcula. |
-| `anulaciones` | `id` (UUID) | `venta_id`, cuenta, dispositivo, fecha, motivo | Movimiento nuevo; la venta no se toca. Una sola por venta. Queda en `historial`. |
+| `anulaciones` | `id` (UUID) | `venta_id`, cuenta, dispositivo, `turno_id`, fecha, motivo | Movimiento nuevo; la venta no se toca. Una sola por venta. `turno_id` es el turno abierto de la PC donde se anula; su cierre la resta. Queda en `historial`. |
 | `historial` | `id` (UUID) | `negocio_id`, tipo (cambio de precio, cambio de producto, anulación, apertura de turno, cierre de turno), cuenta, dispositivo, fecha y hora, entidad afectada, valor anterior, valor nuevo, motivo | Sólo se agrega; nunca se edita ni se borra. Valor anterior y nuevo en cambios de precio o de producto (nombre, precio, activo). Motivo en anulaciones. Propuesta: también se registra el alta de un producto. |
 
 ### Numeración de ventas
@@ -247,11 +247,13 @@ Opción elegida: "Ambas".
 
 ### Turnos
 - Apertura: marca el inicio del turno con cuenta, dispositivo y fecha y hora. No pide monto inicial en efectivo.
-- Cierre simple, en el MVP: marca el fin y muestra el total cobrado por medio de pago en el turno. Sin arqueo ni conteo de efectivo.
+- Cierre simple, en el MVP: marca el fin y muestra el total cobrado por medio de pago en el turno. Sin arqueo ni conteo de efectivo. Las anulaciones hechas en el turno restan en ese turno, aunque la venta sea de otro turno, de otra PC o de otro día.
+- La pantalla "No hay turno abierto en esta PC" vuelve a mostrar el último turno cerrado de esa PC: apertura, cierre y total por medio de pago, igual que al cerrarlo (decisión de Felipe, 2026-10-22). Así los totales se ven aunque se pierda la respuesta del cierre. La caja lo ve sólo si el turno cerró hoy, como la caja del día; el jefe, de cualquier día. Un turno que se cerró solo al abrir otro no llega a esa pantalla, porque ya hay uno abierto; sus ventas siguen en la caja del día.
 - Caja y jefe pueden abrir y cerrar turno. Cada apertura y cierre queda en el historial.
 - Un turno por PC (decisión 38). Si una PC abre un turno mientras tiene otro abierto, el anterior se cierra solo con la hora de la nueva apertura (SUPUESTO NUEVO, sección 13).
 - El turno es un marcador: la caja se reporta por día, no por turno.
 - La caja sólo vende con un turno abierto (SUPUESTO NUEVO).
+- Para anular hace falta un turno abierto en la PC donde se anula, también para el jefe (decisión de Felipe, 2026-10-22). Así cada anulación resta en exactamente un turno: el abierto en la PC donde se hizo. Si los turnos de un día abren y cierran ese mismo día, la suma de sus cierres es igual a la caja del día; un turno que pasa la medianoche suma en su cierre las ventas y anulaciones de los dos días, y la caja del día las separa por día.
 - Un turno que no se cierra queda abierto hasta la próxima apertura (SUPUESTO NUEVO).
 
 ### Anulación
@@ -261,10 +263,11 @@ Opción elegida: "Ambas".
   - Jefe: ventas de cualquier día.
 - La base chequea el rol y el día. Ocultar el botón no es seguridad.
 - Requiere motivo.
+- Requiere un turno abierto en la PC donde se anula, para la caja y para el jefe (2026-10-22). Si no hay, la base la rechaza (`sin_turno`) y la pantalla pide abrir el turno en esa PC. La anulación cuenta en ese turno: resta en su cierre. Un reintento de una anulación ya hecha la devuelve aunque el turno ya esté cerrado.
 - Nunca se borra nada: la anulación es un movimiento nuevo.
 - Anular dos veces devuelve la anulación que ya existe; no falla. Hay una sola anulación por venta, aunque llegue otro `id`.
 - Una venta con pagos fiados se anula completa: la deuda se anula con ella.
-- Cada anulación guarda cuenta, dispositivo, fecha y motivo, y queda en el historial. La caja del día muestra las anulaciones aparte, para revisarlas.
+- Cada anulación guarda cuenta, dispositivo, turno, fecha y motivo, y queda en el historial. La caja del día muestra las anulaciones aparte, para revisarlas.
 - La caja del día resta la anulación el día en que se anula, aunque la venta sea de otro día.
 
 ### Caja del día
@@ -325,7 +328,7 @@ Opción elegida: "Ambas".
 | Editar precio, nombre y activo de productos | Sí | Sí |
 | Anular ventas, con motivo | Sólo del mismo día | De cualquier día |
 | Abrir y cerrar turno | Sí | Sí |
-| Ver ventas y caja del día | Sólo de hoy | Historial completo |
+| Ver ventas, caja del día y último turno cerrado | Sólo de hoy | Historial completo |
 | Ver productos | Sí | Sí |
 | Activar o desactivar el módulo fiado | No | Sí (decisión 39) |
 | Anonimizar un cliente a pedido | No | Sí (decisión 40) |

@@ -58,6 +58,7 @@ export const MENSAJES_CAJA_DEL_DIA: Record<string, string> = {
   fuera_de_dia: 'La caja sólo ve y anula ventas de hoy.',
   motivo_invalido: 'Escribí el motivo (de 3 a 200 letras).',
   venta_desconocida: 'Esa venta no existe en este kiosco.',
+  sin_turno: 'Para anular, abrí el turno en esta PC.',
   fecha_invalida: 'Elegí una fecha.',
   sin_cuenta: 'Esta cuenta no está vinculada a este kiosco.',
   dispositivo_desconocido: 'Esta PC no está registrada en el kiosco. Cerrá sesión y volvé a entrar.',

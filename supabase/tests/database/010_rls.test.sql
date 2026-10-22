@@ -118,13 +118,13 @@ insert into public.pagos_venta (negocio_id, venta_id, medio, importe, cliente_id
   ('b0000000-0000-0000-0000-000000000000', 'b4000000-0000-0000-0000-000000000001', 'efectivo', 700, null);
 
 -- Anulación hecha hoy (venta de hoy) y hecha ayer (venta de ayer).
-insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, fecha, motivo) values
+insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, turno_id, fecha, motivo) values
   ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000001a',
-   'a1000000-0000-0000-0000-000000000001', now(), 'error de carga'),
+   'a1000000-0000-0000-0000-000000000001', 'a3000000-0000-0000-0000-000000000001', now(), 'error de carga'),
   ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-00000000001a',
-   'a1000000-0000-0000-0000-000000000001', now() - interval '1 day', 'error de carga'),
+   'a1000000-0000-0000-0000-000000000001', 'a3000000-0000-0000-0000-000000000001', now() - interval '1 day', 'error de carga'),
   ('b0000000-0000-0000-0000-000000000000', 'b4000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000b',
-   'b1000000-0000-0000-0000-000000000001', now(), 'error de carga');
+   'b1000000-0000-0000-0000-000000000001', 'b3000000-0000-0000-0000-000000000001', now(), 'error de carga');
 
 insert into public.historial (negocio_id, tipo, cuenta_id, dispositivo_id, entidad, entidad_id, valor_anterior, valor_nuevo) values
   ('a0000000-0000-0000-0000-000000000000', 'cambio_precio', 'c0000000-0000-0000-0000-00000000000a',

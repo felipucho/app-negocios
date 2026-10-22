@@ -77,6 +77,39 @@ describe('Kiosco', () => {
     expect(await screen.findByRole('button', { name: 'Abrir turno' })).toBeVisible()
   })
 
+  it('si el turno ya estaba cerrado (se perdió la respuesta del cierre), muestra el último cierre', async () => {
+    const { servicios, user } = armar(CUENTA_CAJA)
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await screen.findByRole('combobox', { name: 'Escanear o buscar' })
+    const turno = servicios.turno.mock.results[0].value
+    turno.cerrar.mockRejectedValueOnce({ message: 'sin_turno' })
+    turno.ultimoCerrado.mockResolvedValue({
+      turnoId: 't1',
+      apertura: '2026-10-19T12:00:00Z',
+      cierre: '2026-10-19T20:00:00Z',
+      totales: { efectivo: 1500, transferencia: 0, tarjeta: 0, fiado: 0, cobrado: 1500 },
+    })
+    await user.click(screen.getByRole('button', { name: 'Productos' }))
+    await user.click(screen.getByRole('button', { name: 'Cerrar turno' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, cerrar turno' }))
+    expect(await screen.findByRole('heading', { name: 'No hay turno abierto en esta PC' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Último turno cerrado' })).toBeVisible()
+    expect(screen.getAllByText('$1.500')).toHaveLength(2) // efectivo y total cobrado
+    expect(screen.queryByRole('heading', { name: 'Precios y productos' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('si el cierre falla por la red, lo avisa y la venta sigue', async () => {
+    const { servicios, user } = armar(CUENTA_CAJA)
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    const campo = await screen.findByRole('combobox', { name: 'Escanear o buscar' })
+    servicios.turno.mock.results[0].value.cerrar.mockRejectedValueOnce(new Error('sin red'))
+    await user.click(screen.getByRole('button', { name: 'Cerrar turno' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, cerrar turno' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cerrar el turno. Revisá la conexión.')
+    expect(campo).toBeVisible()
+  })
+
   it('al volver a la caja el foco vuelve al campo de escaneo (decisión 13)', async () => {
     const { user } = armar(CUENTA_JEFE)
     await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))

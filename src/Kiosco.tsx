@@ -102,7 +102,14 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
       setSeccion('caja')
     } catch (e) {
       const sinTurno = typeof e === 'object' && e !== null && 'message' in e && e.message === 'sin_turno'
-      setAvisoTurno(sinTurno ? 'No hay turno abierto en esta PC.' : 'No se pudo cerrar el turno. Revisá la conexión.')
+      if (sinTurno) {
+        // Ya estaba cerrado (quizás se perdió la respuesta del cierre): la caja nueva lee la base y
+        // muestra "No hay turno abierto" con los totales del último cierre.
+        setSeccion('caja')
+        setVueltaCaja((v) => v + 1)
+      } else {
+        setAvisoTurno('No se pudo cerrar el turno. Revisá la conexión.')
+      }
     }
   }
 

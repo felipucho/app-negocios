@@ -8,6 +8,7 @@ import type { ServicioProductos } from '../productos/productos'
 import { buscarPorNombre } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
 import type { ProductoCache } from '../tipos'
+import type { CierreTurno } from '../turno/turno'
 
 function producto(id: string, nombre: string, precio: number, codigo_barras: string | null, activo = true): ProductoCache {
   return { id, nombre, precio, codigo_barras, activo, creado_en_caja: false, palabras: palabras(nombre) }
@@ -58,6 +59,7 @@ export function turnoDePrueba(abierto: boolean) {
   return {
     leer: vi.fn(async () => (abierto ? turno : null)),
     abrir: vi.fn(async () => turno),
+    ultimoCerrado: vi.fn(async (): Promise<CierreTurno | null> => null),
   }
 }
 

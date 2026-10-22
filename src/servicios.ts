@@ -12,7 +12,7 @@ import { crearServicioJefe, type ServicioJefe } from './jefe/jefe'
 import { leerConfigNegocio, leerEstadoAbonoNegocio, type ConfigNegocio, type EstadoAbono } from './negocio/config'
 import { crearServicioClientes, fiadoActivo, type ServicioClientes } from './pagos/clientes'
 import { crearServicioProductos, type ServicioProductos } from './productos/productos'
-import { abrirTurno, cerrarTurno, leerTurnoAbierto, type CierreTurno } from './turno/turno'
+import { abrirTurno, cerrarTurno, leerTurnoAbierto, leerUltimoTurnoCerrado, type CierreTurno } from './turno/turno'
 import type { LlamarRpc } from './venta/confirmar'
 
 /** Turno de una PC: lo que pide PantallaCaja más el cierre (tarea 8). */
@@ -93,6 +93,7 @@ export function crearServicios(supabase: SupabaseClient, db: CacheCatalogo, clav
       leer: () => leerTurnoAbierto(supabase, id),
       abrir: () => abrirTurno(supabase, id),
       cerrar: () => cerrarTurno(supabase, id),
+      ultimoCerrado: () => leerUltimoTurnoCerrado(supabase, id),
     }),
     productos: (id) => crearServicioProductos(supabase, id, alCambiarCatalogo),
     cajaDelDia: (id) => crearServicioCajaDelDia(supabase, id),

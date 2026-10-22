@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(28);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'anu-caja-a@prueba.local'),
@@ -18,6 +18,7 @@ insert into public.cuentas (usuario_id, negocio_id, rol) values
   ('c0000000-0000-0000-0000-00000000001b', 'b0000000-0000-0000-0000-000000000000', 'jefe');
 insert into public.dispositivos (id, negocio_id, prefijo, creado_por) values
   ('a1000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'A', 'c0000000-0000-0000-0000-00000000000a'),
+  ('a1000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000000', 'B', 'c0000000-0000-0000-0000-00000000000a'),
   ('b1000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'A', 'c0000000-0000-0000-0000-00000000000b');
 insert into public.turnos (id, negocio_id, dispositivo_id, cuenta_id) values
   ('a3000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a'),
@@ -33,7 +34,7 @@ insert into public.ventas (id, negocio_id, dispositivo_id, cuenta_id, turno_id, 
   ('b4000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'b1000000-0000-0000-0000-000000000001',
    'c0000000-0000-0000-0000-00000000000b', 'b3000000-0000-0000-0000-000000000001', 1, now(), 700, repeat('d', 64));
 
--- 1 a 11: caja de A
+-- 1 a 13: caja de A. La PC B (a1...02) no tiene turno abierto.
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
@@ -71,10 +72,19 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
 select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000003',
     'b1000000-0000-0000-0000-000000000001', 'PC ajena') $$,
   'P0001', 'dispositivo_desconocido', 'no se anula desde una PC de otro negocio');
+select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000003',
+    'a1000000-0000-0000-0000-000000000002', 'Error de carga') $$,
+  'P0001', 'sin_turno', 'la caja no anula desde una PC sin turno abierto');
+select is(public.anular_venta('a4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000002',
+    'Reintento') ->> 'ya_existia',
+  'true', 'una anulación ya hecha se devuelve aunque la PC no tenga turno abierto');
 
--- 12 y 13: jefe de A, después la caja reintenta
+-- 14 a 16: jefe de A, después la caja reintenta
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
+select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000002',
+    'a1000000-0000-0000-0000-000000000002', 'Devolución del cliente') $$,
+  'P0001', 'sin_turno', 'el jefe tampoco anula desde una PC sin turno abierto');
 select is(public.anular_venta('a4000000-0000-0000-0000-000000000002', 'a1000000-0000-0000-0000-000000000001',
     'Devolución del cliente') ->> 'ya_existia',
   'false', 'el jefe anula una venta de ayer');
@@ -84,7 +94,7 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
     'a1000000-0000-0000-0000-000000000001', 'Reintento') $$,
   'P0001', 'fuera_de_dia', 'la caja no ve la anulación de ayer aunque exista');
 
--- 14 a 16: caja de B (aislamiento, obligatorio)
+-- 17 a 19: caja de B (aislamiento, obligatorio)
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000001',
@@ -95,7 +105,7 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
   'P0001', 'venta_desconocida', 'B no anula una venta de A');
 select is((select count(*)::int from public.anulaciones), 0, 'B no ve anulaciones de A');
 
--- 17 y 18: jefe de B
+-- 20 y 21: jefe de B
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001b","role":"authenticated","negocio_id":"b0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000003',
@@ -107,21 +117,23 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
     'a1000000-0000-0000-0000-000000000001', 'Token trucado') $$,
   'P0001', 'sin_cuenta', 'una cuenta de B con negocio_id de A en el token no anula en A');
 
--- 19: authenticated sin cuenta
+-- 22: authenticated sin cuenta
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-0000000000ff","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
 select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-000000000003',
     'a1000000-0000-0000-0000-000000000001', 'Sin cuenta') $$,
   'P0001', 'sin_cuenta', 'un usuario sin cuenta no anula');
 
--- 20 a 25: lo que quedó grabado, visto como postgres
+-- 23 a 28: lo que quedó grabado, visto como postgres
 reset role;
 select results_eq(
-  $$ select venta_id, cuenta_id, dispositivo_id from public.anulaciones
+  $$ select venta_id, cuenta_id, dispositivo_id, turno_id from public.anulaciones
      where venta_id in ('a4000000-0000-0000-0000-000000000001', 'a4000000-0000-0000-0000-000000000002') order by venta_id $$,
-  $$ values ('a4000000-0000-0000-0000-000000000001'::uuid, 'c0000000-0000-0000-0000-00000000000a'::uuid, 'a1000000-0000-0000-0000-000000000001'::uuid),
-            ('a4000000-0000-0000-0000-000000000002'::uuid, 'c0000000-0000-0000-0000-00000000001a'::uuid, 'a1000000-0000-0000-0000-000000000001'::uuid) $$,
-  'una sola anulación por venta, con cuenta y dispositivo');
+  $$ values ('a4000000-0000-0000-0000-000000000001'::uuid, 'c0000000-0000-0000-0000-00000000000a'::uuid,
+             'a1000000-0000-0000-0000-000000000001'::uuid, 'a3000000-0000-0000-0000-000000000001'::uuid),
+            ('a4000000-0000-0000-0000-000000000002'::uuid, 'c0000000-0000-0000-0000-00000000001a'::uuid,
+             'a1000000-0000-0000-0000-000000000001'::uuid, 'a3000000-0000-0000-0000-000000000001'::uuid) $$,
+  'una sola anulación por venta, con cuenta, dispositivo y el turno abierto de esa PC');
 select results_eq(
   $$ select entidad_id, motivo, cuenta_id from public.historial where tipo = 'anulacion'
      and entidad_id in ('a4000000-0000-0000-0000-000000000001', 'a4000000-0000-0000-0000-000000000002') order by entidad_id $$,

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(8);
 
 -- Genéricas sobre TODAS las funciones security definer de public. El aislamiento de cada una lo prueba su caso en 140_aislamiento.
 select is_empty($$
@@ -29,12 +29,14 @@ select set_eq($$
   where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE') $$,
   array['abrir_turno', 'alta_cliente', 'alta_producto_caja', 'anonimizar_cliente', 'anular_venta', 'caja_del_dia',
         'cambiar_modulo_fiado', 'cerrar_turno', 'clientes_con_telefono', 'confirmar_venta', 'editar_producto',
-        'ranking_sin_codigo', 'registrar_dispositivo', 'ventas_del_dia'],
+        'ranking_sin_codigo', 'registrar_dispositivo', 'ultimo_turno_cerrado', 'ventas_del_dia'],
   'authenticated ejecuta sólo las funciones security definer de la lista');
 
 select ok(not has_function_privilege('anon', 'public.modulo_activo(text)', 'execute'), 'anon no ejecuta modulo_activo');
 select ok(not has_function_privilege('authenticated', 'public.prefijo_dispositivo(integer)', 'execute'),
   'prefijo_dispositivo es interna');
+select ok(not has_function_privilege('authenticated', 'public.totales_turno(uuid)', 'execute'),
+  'totales_turno es interna: no filtra por negocio, sólo la llaman cerrar_turno y ultimo_turno_cerrado');
 
 select * from finish();
 rollback;

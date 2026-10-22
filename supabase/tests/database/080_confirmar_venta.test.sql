@@ -166,9 +166,10 @@ select is((select r ->> 'venta_id' || '|' || (r ->> 'ya_existia') || '|' || (r -
 
 -- 30c: grabada, error de red, el jefe la anula, la caja reintenta: avisa que está anulada y no hay vuelto
 reset role;
-insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, motivo) values
-  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000001',
-   'c0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-000000000001', 'Se anuló antes del reintento');
+insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, turno_id, motivo)
+select 'a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000001',
+       'c0000000-0000-0000-0000-00000000000a', t.dispositivo_id, t.id, 'Se anuló antes del reintento'
+from public.turnos t where t.dispositivo_id = 'a1000000-0000-0000-0000-000000000001' and t.cierre is null;
 set local role authenticated;
 select is((select (r ->> 'ya_existia') || '|' || (r ->> 'anulada') || '|' || (r ->> 'vuelto')
     from public.confirmar_venta('a4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',

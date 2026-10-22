@@ -44,9 +44,39 @@ begin
 end;
 $$;
 
+-- Total por medio de pago de un turno. Las anulaciones hechas en ese turno restan (misma regla que la
+-- caja del día: la anulación resta cuando se hace, no cuando se vendió).
+-- Sin chequeo de negocio: la llaman cerrar_turno y ultimo_turno_cerrado con un turno ya validado; la app no.
+create or replace function public.totales_turno(p_turno_id uuid)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  with movimientos as (
+    select pv.medio, pv.importe
+    from public.ventas v
+    join public.pagos_venta pv on pv.venta_id = v.id
+    where v.turno_id = p_turno_id
+    union all
+    select pv.medio, -pv.importe
+    from public.anulaciones a
+    join public.pagos_venta pv on pv.venta_id = a.venta_id
+    where a.turno_id = p_turno_id
+  )
+  select jsonb_build_object(
+    'efectivo', coalesce(sum(importe) filter (where medio = 'efectivo'), 0),
+    'transferencia', coalesce(sum(importe) filter (where medio = 'transferencia'), 0),
+    'tarjeta', coalesce(sum(importe) filter (where medio = 'tarjeta'), 0),
+    'fiado', coalesce(sum(importe) filter (where medio = 'fiado'), 0),
+    'cobrado', coalesce(sum(importe) filter (where medio <> 'fiado'), 0)
+  )
+  from movimientos
+$$;
+
 -- Cierre simple: marca el fin y devuelve el total por medio de pago del turno. Sin arqueo.
--- Las anulaciones hechas desde esta PC durante el turno restan (misma regla que la caja del día:
--- la anulación resta cuando se hace, no cuando se vendió).
+-- anular_venta toma el mismo bloqueo de la PC: ninguna anulación entra en el turno después de
+-- calcular estos totales.
 create or replace function public.cerrar_turno(p_dispositivo_id uuid)
 returns jsonb
 language plpgsql
@@ -57,7 +87,6 @@ declare
   v_negocio uuid := public.negocio_actual();
   v_rol public.rol_cuenta := public.rol_actual();
   v_turno public.turnos%rowtype;
-  v_totales jsonb;
 begin
   if v_rol is null then
     raise exception 'sin_cuenta' using errcode = 'P0001';
@@ -77,36 +106,58 @@ begin
     raise exception 'sin_turno' using errcode = 'P0001';
   end if;
 
-  with movimientos as (
-    select pv.medio, pv.importe
-    from public.ventas v
-    join public.pagos_venta pv on pv.venta_id = v.id
-    where v.turno_id = v_turno.id
-    union all
-    select pv.medio, -pv.importe
-    from public.anulaciones a
-    join public.pagos_venta pv on pv.venta_id = a.venta_id
-    where a.negocio_id = v_turno.negocio_id and a.dispositivo_id = v_turno.dispositivo_id
-      and a.fecha >= v_turno.apertura and a.fecha <= v_turno.cierre
-  )
-  select jsonb_build_object(
-    'efectivo', coalesce(sum(importe) filter (where medio = 'efectivo'), 0),
-    'transferencia', coalesce(sum(importe) filter (where medio = 'transferencia'), 0),
-    'tarjeta', coalesce(sum(importe) filter (where medio = 'tarjeta'), 0),
-    'fiado', coalesce(sum(importe) filter (where medio = 'fiado'), 0),
-    'cobrado', coalesce(sum(importe) filter (where medio <> 'fiado'), 0)
-  )
-  into v_totales
-  from movimientos;
-
   insert into public.historial (negocio_id, tipo, cuenta_id, dispositivo_id, entidad, entidad_id, valor_nuevo)
   values (v_negocio, 'cierre_turno', auth.uid(), p_dispositivo_id, 'turnos', v_turno.id,
           jsonb_build_object('automatico', false));
 
   return jsonb_build_object('turno_id', v_turno.id, 'apertura', v_turno.apertura, 'cierre', v_turno.cierre,
-                            'totales', v_totales);
+                            'totales', public.totales_turno(v_turno.id));
 end;
 $$;
 
-revoke all on function public.abrir_turno(uuid), public.cerrar_turno(uuid) from public, anon, authenticated;
-grant execute on function public.abrir_turno(uuid), public.cerrar_turno(uuid) to authenticated;
+-- Último turno cerrado de esta PC, con el mismo formato que cerrar_turno; null si no cerró ninguno.
+-- La pantalla sin turno abierto lo muestra (Felipe, 2026-10-22): si se perdió la respuesta del cierre,
+-- el reintento da sin_turno y los totales sólo se ven acá. Sólo lee: un turno cerrado ya no suma
+-- anulaciones (anular_venta exige un turno abierto en la PC). La caja sólo ve un cierre de hoy (spec
+-- sección 10, como caja_del_dia); el jefe, de cualquier día.
+create or replace function public.ultimo_turno_cerrado(p_dispositivo_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_negocio uuid := public.negocio_actual();
+  v_rol public.rol_cuenta := public.rol_actual();
+  v_turno public.turnos%rowtype;
+begin
+  if v_rol is null then
+    raise exception 'sin_cuenta' using errcode = 'P0001';
+  end if;
+
+  perform 1 from public.dispositivos d
+  where d.id = p_dispositivo_id and d.negocio_id = v_negocio;
+  if not found then
+    raise exception 'dispositivo_desconocido' using errcode = 'P0001';
+  end if;
+
+  select * into v_turno
+  from public.turnos t
+  where t.dispositivo_id = p_dispositivo_id and t.negocio_id = v_negocio and t.cierre is not null
+  order by t.cierre desc
+  limit 1;
+  if v_turno.id is null or (v_rol = 'caja' and public.dia_operativo(v_turno.cierre) <> public.hoy()) then
+    return null;
+  end if;
+
+  return jsonb_build_object('turno_id', v_turno.id, 'apertura', v_turno.apertura, 'cierre', v_turno.cierre,
+                            'totales', public.totales_turno(v_turno.id));
+end;
+$$;
+
+revoke all on function public.totales_turno(uuid) from public, anon, authenticated;
+revoke all on function public.abrir_turno(uuid), public.cerrar_turno(uuid), public.ultimo_turno_cerrado(uuid)
+  from public, anon, authenticated;
+grant execute on function public.abrir_turno(uuid), public.cerrar_turno(uuid), public.ultimo_turno_cerrado(uuid)
+  to authenticated;

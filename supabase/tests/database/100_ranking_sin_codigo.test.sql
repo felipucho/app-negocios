@@ -71,9 +71,9 @@ insert into public.lineas_venta (negocio_id, venta_id, producto_id, cantidad, pr
   -- s7: B
   ('b0000000-0000-0000-0000-000000000000', 'b4000000-0000-0000-0000-000000000001', 'b2000000-0000-0000-0000-000000000001', 1, 500);
 
-insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, motivo) values
-  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000006',
-   'c0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-000000000001', 'Prueba de ranking');
+insert into public.anulaciones (negocio_id, venta_id, cuenta_id, dispositivo_id, turno_id, motivo) values
+  ('a0000000-0000-0000-0000-000000000000', 'a4000000-0000-0000-0000-000000000006', 'c0000000-0000-0000-0000-00000000000a',
+   'a1000000-0000-0000-0000-000000000001', 'a3000000-0000-0000-0000-000000000001', 'Prueba de ranking');
 
 -- 1 a 7: caja de A
 set local role authenticated;

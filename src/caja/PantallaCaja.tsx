@@ -6,7 +6,7 @@ import { AltaRapidaProducto } from '../productos/AltaRapidaProducto'
 import { aProductoCache, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
 import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
 import { PedirApertura } from '../turno/PantallaTurno'
-import type { TurnoAbierto } from '../turno/turno'
+import type { CierreTurno, TurnoAbierto } from '../turno/turno'
 import { pitido } from '../ui/pitido'
 import { carritoReducer, carritoVacio, totalCarrito, type AccionCarrito } from '../venta/carrito'
 import { crearIdVenta, type GeneradorIdVenta } from '../venta/idVenta'
@@ -23,10 +23,11 @@ const ENFOCABLES = 'input, textarea, select, button, a[href], [tabindex]'
 export const AVISO_ESCANEO_EN_COBRO =
   'El cobro está abierto: el escaneo no se agregó. Volvé a la venta para agregar productos.'
 
-/** Turno de esta PC. La tarea 17 lo arma con leerTurnoAbierto y abrirTurno (tarea 8). */
+/** Turno de esta PC. La tarea 17 lo arma con leerTurnoAbierto, abrirTurno y leerUltimoTurnoCerrado. */
 export interface ServicioTurno {
   leer(): Promise<TurnoAbierto | null>
   abrir(): Promise<TurnoAbierto>
+  ultimoCerrado(): Promise<CierreTurno | null>
 }
 
 /** Lo que la pantalla de cobro (tarea 14) recibe de la caja. */
@@ -417,6 +418,7 @@ export function PantallaCaja({
         alAbrir={async () => {
           setEstadoTurno({ tipo: 'abierto', turno: await turno.abrir() })
         }}
+        leerUltimoCerrado={turno.ultimoCerrado}
       />
     )
   }

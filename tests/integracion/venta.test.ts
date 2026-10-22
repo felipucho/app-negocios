@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { crearServicioClientes, fiadoActivo } from '../../src/pagos/clientes'
-import { abrirTurno } from '../../src/turno/turno'
+import { abrirTurno, cerrarTurno, leerUltimoTurnoCerrado } from '../../src/turno/turno'
 import { pagosAEnviar, type ImportesPorMedio } from '../../src/venta/cobro'
 import {
   claveContenido,
@@ -169,5 +169,20 @@ describe('venta completa contra Supabase local', () => {
       await confirmarVenta(rpcDe(b.caja.cliente), crypto.randomUUID(), pedidoDe(a.dispositivoId, a.alfajor)),
     ).toMatchObject({ tipo: 'rechazada', codigo: 'dispositivo_desconocido' })
     expect(await contarVentas(a.kiosco.negocioId)).toBe(0)
+  })
+
+  it('el último turno cerrado de la PC trae lo mismo que devolvió el cierre', async () => {
+    const { kiosco, dispositivoId, alfajor, rpc } = await prepararKiosco('Kiosco último turno', false)
+    const cliente = kiosco.caja.cliente
+    expect(await leerUltimoTurnoCerrado(cliente, dispositivoId)).toBeNull()
+    await abrirTurno(cliente, dispositivoId)
+    const pedido = pedidoDe(dispositivoId, alfajor, 1, { ...SIN_PAGOS, efectivo: 400, tarjeta: 500 })
+    venta(await confirmarVenta(rpc, crypto.randomUUID(), pedido))
+    const cierre = await cerrarTurno(cliente, dispositivoId)
+    expect(cierre.totales).toEqual({ efectivo: 400, transferencia: 0, tarjeta: 500, fiado: 0, cobrado: 900 })
+    expect(await leerUltimoTurnoCerrado(cliente, dispositivoId)).toEqual(cierre)
+    // El turno nuevo, abierto, no lo tapa.
+    await abrirTurno(cliente, dispositivoId)
+    expect(await leerUltimoTurnoCerrado(cliente, dispositivoId)).toEqual(cierre)
   })
 })

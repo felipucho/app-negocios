@@ -1,12 +1,32 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatearPesos } from '../lib/plata'
-import type { CierreTurno } from './turno'
+import type { CierreTurno, TotalesTurno } from './turno'
 
-/** Sin turno abierto la caja no vende (SUPUESTO NUEVO): esta pantalla lo pide. Sin monto inicial. */
-export function PedirApertura({ alAbrir }: { alAbrir: () => Promise<void> }) {
+const FECHA_HORA = new Intl.DateTimeFormat('es-AR', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
+interface PropsPedirApertura {
+  alAbrir: () => Promise<void>
+  leerUltimoCerrado: () => Promise<CierreTurno | null>
+}
+
+/**
+ * Sin turno abierto la caja no vende (SUPUESTO NUEVO): esta pantalla lo pide. Sin monto inicial.
+ * Muestra el último turno cerrado de la PC: si se perdió la respuesta del cierre, sus totales se ven acá.
+ */
+export function PedirApertura({ alAbrir, leerUltimoCerrado }: PropsPedirApertura) {
   const enCurso = useRef(false)
   const [abriendo, setAbriendo] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ultimo, setUltimo] = useState<CierreTurno | null>(null)
+
+  useEffect(() => {
+    // Sólo informa: si no se puede leer, no se muestra y abrir el turno sigue igual.
+    leerUltimoCerrado().then(setUltimo, (e) => console.warn('último turno cerrado', e))
+  }, [leerUltimoCerrado])
 
   async function abrir() {
     if (enCurso.current) return
@@ -40,13 +60,20 @@ export function PedirApertura({ alAbrir }: { alAbrir: () => Promise<void> }) {
           {error}
         </p>
       )}
+      {ultimo && (
+        <>
+          <h3>Último turno cerrado</h3>
+          <p>
+            {FECHA_HORA.format(new Date(ultimo.apertura))} – {FECHA_HORA.format(new Date(ultimo.cierre))}
+          </p>
+          <TablaTotales totales={ultimo.totales} />
+        </>
+      )}
     </section>
   )
 }
 
-/** Cierre simple (decisión 26): total por medio de pago del turno, sin arqueo. */
-export function ResumenCierre({ cierre, alSeguir }: { cierre: CierreTurno; alSeguir: () => void }) {
-  const t = cierre.totales
+function TablaTotales({ totales: t }: { totales: TotalesTurno }) {
   const filas: [string, number][] = [
     ['Efectivo', t.efectivo],
     ['Transferencia', t.transferencia],
@@ -55,18 +82,25 @@ export function ResumenCierre({ cierre, alSeguir }: { cierre: CierreTurno; alSeg
     ['Fiado (no cobrado)', t.fiado],
   ]
   return (
+    <table>
+      <tbody>
+        {filas.map(([nombre, importe]) => (
+          <tr key={nombre}>
+            <th scope="row">{nombre}</th>
+            <td>{formatearPesos(importe)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** Cierre simple (decisión 26): total por medio de pago del turno, sin arqueo. */
+export function ResumenCierre({ cierre, alSeguir }: { cierre: CierreTurno; alSeguir: () => void }) {
+  return (
     <section className="turno">
       <h2>Turno cerrado</h2>
-      <table>
-        <tbody>
-          {filas.map(([nombre, importe]) => (
-            <tr key={nombre}>
-              <th scope="row">{nombre}</th>
-              <td>{formatearPesos(importe)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <TablaTotales totales={cierre.totales} />
       <button type="button" onClick={alSeguir}>
         Listo
       </button>

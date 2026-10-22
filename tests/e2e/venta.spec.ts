@@ -217,6 +217,8 @@ test('5. el jefe anula una venta de ayer con motivo; la caja no puede', async ({
 
   // El jefe: elige ayer, anula con motivo; la venta queda anulada y no se borra.
   await entrar(page, 'jefe')
+  // Anular pide un turno abierto en esta PC, también al jefe.
+  await abrirTurno(page)
   await irA(page, 'Caja del día')
   // Primero llega hoy() de la base; si la fecha se elige antes, esa respuesta la pisa.
   await expect(page.getByLabel('Fecha')).toHaveValue(diaOperativo(0))

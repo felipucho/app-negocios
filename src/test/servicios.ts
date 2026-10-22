@@ -61,6 +61,7 @@ function turnoFalso() {
       cierre: '2026-10-19T20:00:00Z',
       totales: { efectivo: 0, transferencia: 0, tarjeta: 0, fiado: 0, cobrado: 0 },
     })),
+    ultimoCerrado: vi.fn(async (): Promise<CierreTurno | null> => null),
   }
 }
 

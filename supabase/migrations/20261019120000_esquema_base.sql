@@ -116,6 +116,8 @@ create table public.turnos (
 create index turnos_negocio_apertura_idx on public.turnos (negocio_id, apertura);
 create unique index turnos_un_abierto_por_dispositivo on public.turnos (dispositivo_id)
   where cierre is null;
+-- ultimo_turno_cerrado.
+create index turnos_dispositivo_cierre_idx on public.turnos (dispositivo_id, cierre);
 
 -- El id lo genera el navegador antes de confirmar y viaja igual en cada reintento del mismo contenido.
 -- hash_contenido: sha256 en hex del contenido, lo calcula confirmar_venta (tarea 10).
@@ -168,19 +170,23 @@ create index pagos_venta_venta_idx on public.pagos_venta (venta_id);
 
 -- La anulación es un movimiento nuevo: la venta no se toca. Una sola por venta.
 -- La caja del día la resta el día de anulaciones.fecha (decisión 17).
+-- turno_id: el turno abierto de la PC donde se anula; su cierre la resta (2026-10-22).
 create table public.anulaciones (
   id uuid primary key default gen_random_uuid(),
   negocio_id uuid not null references public.negocios (id),
   venta_id uuid not null unique,
   cuenta_id uuid not null,
   dispositivo_id uuid not null,
+  turno_id uuid not null,
   fecha timestamptz not null default now(),
   motivo text not null check (char_length(btrim(motivo)) between 3 and 200),
   foreign key (venta_id, negocio_id) references public.ventas (id, negocio_id),
   foreign key (cuenta_id, negocio_id) references public.cuentas (usuario_id, negocio_id),
-  foreign key (dispositivo_id, negocio_id) references public.dispositivos (id, negocio_id)
+  foreign key (dispositivo_id, negocio_id) references public.dispositivos (id, negocio_id),
+  foreign key (turno_id, negocio_id) references public.turnos (id, negocio_id)
 );
 create index anulaciones_negocio_fecha_idx on public.anulaciones (negocio_id, fecha);
+create index anulaciones_turno_idx on public.anulaciones (turno_id);
 
 -- Historial de auditoría: sólo se agrega. cuenta_id y dispositivo_id vacíos = cambio hecho fuera
 -- de la app (Supabase Studio). Nunca guarda datos de clientes (la anonimización no deja rastro del nombre).

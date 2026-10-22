@@ -108,6 +108,18 @@ describe('CajaDelDia', () => {
     await waitFor(() => expect(servicio.leerVentas).toHaveBeenCalledTimes(2))
   })
 
+  it('sin turno abierto en la PC, la base rechaza la anulación y se pide abrirlo', async () => {
+    const servicio = servicioFalso()
+    servicio.anular.mockRejectedValueOnce({ message: 'sin_turno' })
+    const { user } = armar('jefe', servicio)
+    await user.click(await screen.findByRole('button', { name: 'Anular A-000012' }))
+    await user.type(screen.getByLabelText('Motivo'), 'Devolución del cliente')
+    await user.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Para anular, abrí el turno en esta PC.')
+    expect(screen.getByRole('form', { name: 'Anular venta' })).toBeInTheDocument()
+    expect(servicio.leerCaja).toHaveBeenCalledTimes(1)
+  })
+
   it('una venta anulada se marca y no ofrece anular', async () => {
     armar('jefe')
     const fila = await screen.findByRole('row', { name: /A-000011/ })
