@@ -314,7 +314,11 @@ describe('PantallaPagos', () => {
         alCambiarPrecios={alCambiarPrecios}
       />,
     )
-    expect(screen.getByRole('alert')).toHaveTextContent('Se apagó el fiado mientras cobrabas')
+    expect(await screen.findByText(/Se apagó el fiado mientras cobrabas/)).toBeInTheDocument()
+    // Cubierto el resto con otro medio, el aviso se va.
+    await user.click(screen.getByLabelText('Tarjeta'))
+    await tipear(user, reloj, '500')
+    expect(screen.queryByText(/Se apagó el fiado mientras cobrabas/)).toBeNull()
   })
 
   it('el comprobante muestra número con prefijo y vuelto hasta tocar Nueva venta', async () => {

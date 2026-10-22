@@ -150,6 +150,15 @@ export function PantallaPagos({
     setEntrega('')
   }, [sesion.total])
 
+  // El jefe apagó el fiado con un importe fiado cargado: el campo desaparece, así que se vacía y se avisa.
+  const [fiadoApagado, setFiadoApagado] = useState(false)
+  useEffect(() => {
+    if (fiadoHabilitado || textos.fiado.trim() === '') return
+    setTextos((t) => ({ ...t, fiado: '' }))
+    setCliente(null)
+    setFiadoApagado(true)
+  }, [fiadoHabilitado, textos.fiado])
+
   const medios = MEDIOS.filter((m) => m !== 'fiado' || fiadoHabilitado)
   const leer = (texto: string) => parsearPesos(texto) ?? Number.NaN
   const importes: ImportesPorMedio = {
@@ -269,7 +278,10 @@ export function PantallaPagos({
           autoFocus={i === 0}
           umbrales={umbrales}
           ahora={ahora}
-          alCambiar={(v) => setTextos((t) => ({ ...t, [m]: v }))}
+          alCambiar={(v) => {
+            setFiadoApagado(false)
+            setTextos((t) => ({ ...t, [m]: v }))
+          }}
           alEnfocar={(campo) => proponer(m, campo)}
           alEscaneo={avisarEscaneo}
         />
@@ -288,7 +300,7 @@ export function PantallaPagos({
       <p className="vuelto">
         Vuelto: <strong>{formatearPesos(cobro.vuelto)}</strong>
       </p>
-      {!fiadoHabilitado && textos.fiado.trim() !== '' && (
+      {fiadoApagado && (
         <p role="alert" className="aviso aviso--error">
           Se apagó el fiado mientras cobrabas: el importe fiado ya no cuenta. Cobrá el resto con otro medio.
         </p>
