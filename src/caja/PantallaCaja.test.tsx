@@ -202,6 +202,27 @@ describe('PantallaCaja', () => {
     expect(await screen.findByRole('row', { name: /Alfajor triple/ })).toBeInTheDocument()
   })
 
+  it('con teclado sólo, Esc en el campo cierra el aviso del turno cerrado solo y el foco sigue en el campo', async () => {
+    const turno = turnoDePrueba(false)
+    turno.abrir.mockResolvedValueOnce({
+      turnoId: 't2',
+      apertura: '2026-10-19T20:00:00Z',
+      turnoCerrado: {
+        turnoId: 't1',
+        apertura: '2026-10-19T11:00:00Z',
+        cierre: '2026-10-19T20:00:00Z',
+        totales: { efectivo: 900, transferencia: 0, tarjeta: 500, fiado: 0, cobrado: 1400 },
+      },
+    })
+    const { user } = armarCaja({ turno })
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    const campo = await screen.findByLabelText('Escanear o buscar')
+    expect(screen.getByRole('heading', { name: AVISO_CERRADO_SOLO })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('heading', { name: AVISO_CERRADO_SOLO })).toBeNull()
+    expect(campo).toHaveFocus()
+  })
+
   it('el id de la venta se mantiene si el carrito no cambió y sale nuevo ante cualquier cambio del carrito', async () => {
     const { user, reloj, sesiones } = armarCaja()
     await campoListo(user)

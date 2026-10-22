@@ -82,7 +82,14 @@ export function AvisoTurnoCerradoSolo({ cierre, alEntender }: { cierre: CierreTu
     <section className="aviso">
       <h2>Se cerró solo el turno anterior de esta PC</h2>
       <DetalleCierre cierre={cierre} />
-      <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={alEntender}>
+      <p>Se cierra con Entendido o con Esc.</p>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-keyshortcuts="Escape"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={alEntender}
+      >
         Entendido
       </button>
     </section>

@@ -227,6 +227,9 @@ export function PantallaCaja({
       else abrirPanel()
     } else if (panelAbierto) {
       cerrarPanel()
+    } else if (cerradoSolo) {
+      // "Entendido" no se alcanza con Tab (el campo no suelta el foco): con teclado sólo, Esc lo cierra.
+      setCerradoSolo(null)
     }
   }
 
