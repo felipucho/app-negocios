@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
 import type { CierreTurno, TotalesTurno } from './turno'
-
-const FECHA_HORA = new Intl.DateTimeFormat('es-AR', {
-  timeZone: 'America/Argentina/Buenos_Aires',
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
 
 interface PropsPedirApertura {
   alAbrir: () => Promise<void>
@@ -25,7 +20,15 @@ export function PedirApertura({ alAbrir, leerUltimoCerrado }: PropsPedirApertura
 
   useEffect(() => {
     // Sólo informa: si no se puede leer, no se muestra y abrir el turno sigue igual.
-    leerUltimoCerrado().then(setUltimo, (e) => console.warn('último turno cerrado', e))
+    // vigente: una respuesta que llega tarde (otra lectura o pantalla desmontada) no pisa el estado.
+    let vigente = true
+    leerUltimoCerrado().then(
+      (c) => vigente && setUltimo(c),
+      (e) => console.warn('último turno cerrado', e),
+    )
+    return () => {
+      vigente = false
+    }
   }, [leerUltimoCerrado])
 
   async function abrir() {
@@ -124,7 +127,7 @@ export function ResumenCierre({ cierre, alSeguir }: { cierre: CierreTurno; alSeg
   return (
     <section className="turno">
       <h2>Turno cerrado</h2>
-      <TablaTotales totales={cierre.totales} />
+      <DetalleCierre cierre={cierre} />
       <button type="button" onClick={alSeguir}>
         Listo
       </button>

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'anu-caja-a@prueba.local'),
@@ -124,7 +124,7 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
     'a1000000-0000-0000-0000-000000000001', 'Sin cuenta') $$,
   'P0001', 'sin_cuenta', 'un usuario sin cuenta no anula');
 
--- 23 a 28: lo que quedó grabado, visto como postgres
+-- 23 a 29: lo que quedó grabado, visto como postgres
 reset role;
 select results_eq(
   $$ select venta_id, cuenta_id, dispositivo_id, turno_id from public.anulaciones
@@ -148,6 +148,12 @@ select ok(not has_function_privilege('anon', 'public.anular_venta(uuid, uuid, te
   'anon no ejecuta anular_venta');
 select ok(has_function_privilege('authenticated', 'public.anular_venta(uuid, uuid, text)', 'execute'),
   'authenticated sí');
+
+-- Sin poder correr dos transacciones a la vez en pgTAP: si se pierde este bloqueo, una anulación puede
+-- entrar al turno después de que cerrar_turno calculó sus totales y no la resta ningún cierre.
+select ok(pg_get_functiondef('public.anular_venta(uuid, uuid, text)'::regprocedure)
+            ~ 'from public\.dispositivos d\s+where d\.id = p_dispositivo_id and d\.negocio_id = v_negocio\s+for update',
+  'anular_venta bloquea la PC como cerrar_turno');
 
 select * from finish();
 rollback;

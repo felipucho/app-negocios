@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
 import { PAGINA_HISTORIAL, type FilaHistorial, type QuienHistorial, type ServicioJefe, type TipoHistorial } from './jefe'
 
@@ -48,12 +49,6 @@ export function describirFila(f: FilaHistorial): string {
       return despues.automatico === true ? 'Cerrado solo al abrir otro turno' : 'Turno cerrado'
   }
 }
-
-const formatoFecha = new Intl.DateTimeFormat('es-AR', {
-  timeZone: 'America/Argentina/Buenos_Aires',
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
 
 export interface PropsPantallaHistorial {
   servicio: Pick<ServicioJefe, 'leerHistorial'>
@@ -108,7 +103,7 @@ export function PantallaHistorial({ servicio }: PropsPantallaHistorial) {
         <tbody>
           {filas.map((f) => (
             <tr key={f.id}>
-              <td>{formatoFecha.format(new Date(f.fecha))}</td>
+              <td>{FECHA_HORA.format(new Date(f.fecha))}</td>
               <td>{TITULO[f.tipo]}</td>
               <td>{describirFila(f)}</td>
               <td>{QUIEN[f.quien]}</td>

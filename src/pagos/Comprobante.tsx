@@ -1,16 +1,11 @@
 import { useRef, type KeyboardEvent } from 'react'
 import { detectarEscaneo, type Pulsacion } from '../escaner/detector'
 import type { Umbrales } from '../escaner/umbrales'
+import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
 import { NOMBRE_MEDIO, type LineaCarrito } from '../tipos'
 import type { PagoAEnviar } from '../venta/cobro'
 import { formatearNumeroVenta, type VentaConfirmada } from '../venta/confirmar'
-
-const FECHA_HORA = new Intl.DateTimeFormat('es-AR', {
-  timeZone: 'America/Argentina/Buenos_Aires',
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
 
 export interface PropsComprobante {
   venta: VentaConfirmada
