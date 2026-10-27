@@ -56,9 +56,9 @@ describe('AltaRapidaProducto', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('producto desactivado')
     expect(screen.queryByRole('button', { name: 'Guardar y agregar' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Reactivar y agregar' }))
-    expect(servicio.editar).toHaveBeenCalledWith('p9', { precio: 450, activo: true })
+    expect(servicio.editar).toHaveBeenCalledWith('p9', { nombre: 'Turrón nuevo', precio: 450, activo: true })
     expect(servicio.alta).toHaveBeenCalledTimes(1)
-    expect(alListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9', precio: 450, activo: true }))
+    expect(alListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9', nombre: 'Turrón nuevo', precio: 450, activo: true }))
   })
 
   it('reactivar también valida el precio: con un precio inválido no llama a la base', async () => {

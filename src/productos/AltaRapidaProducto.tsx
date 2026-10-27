@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { detectarEscaneo, enRacha, esTeclaDeRacha, registrarPulsacion, type PulsacionEnCampo } from '../escaner/detector'
 import type { Umbrales } from '../escaner/umbrales'
 import type { Producto } from '../tipos'
-import { ErrorProducto, mensajeErrorProducto, validarPrecio, validarProducto, type ServicioProductos } from './productos'
+import { ErrorProducto, mensajeErrorProducto, validarProducto, type ServicioProductos } from './productos'
 
 export interface PropsAltaRapidaProducto {
   /** Código escaneado que no está en el catálogo: se guarda tal cual. */
@@ -107,14 +107,10 @@ export function AltaRapidaProducto({
     if (v) void correr(() => servicio.alta(codigo, v.nombre, v.precio))
   }
 
-  /** Sólo precio y activo: el producto conserva su nombre del catálogo (cambiarlo es otra decisión). */
+  /** El producto desactivado toma el nombre y el precio tipeados: son los que se ven y los que se venden. */
   function reactivar(productoId: string) {
-    const p = validarPrecio(precio)
-    if ('error' in p) {
-      setError(p.error)
-      return
-    }
-    void correr(() => servicio.editar(productoId, { precio: p.precio, activo: true }))
+    const v = validar()
+    if (v) void correr(() => servicio.editar(productoId, { ...v, activo: true }))
   }
 
   return (
