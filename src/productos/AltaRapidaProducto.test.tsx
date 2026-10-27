@@ -61,6 +61,20 @@ describe('AltaRapidaProducto', () => {
     expect(alListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9', nombre: 'Turrón nuevo', precio: 450, activo: true }))
   })
 
+  it('reactivar también exige el nombre: con el nombre vacío no llama a la base', async () => {
+    const servicio = servicioProductosFalso([
+      productoDePrueba({ id: 'p9', nombre: 'Turrón viejo', precio: 400, codigo_barras: '7790099', activo: false }),
+    ])
+    servicio.alta.mockRejectedValueOnce(new ErrorProducto('codigo_existente_inactivo', 'p9'))
+    const { user } = armar(servicio)
+    await completar(user, 'Turrón nuevo', '450')
+    await screen.findByRole('button', { name: 'Reactivar y agregar' })
+    await user.clear(screen.getByLabelText('Nombre'))
+    await user.click(screen.getByRole('button', { name: 'Reactivar y agregar' }))
+    expect(await screen.findByText('Escribí un nombre (hasta 80 letras).')).toBeInTheDocument()
+    expect(servicio.editar).not.toHaveBeenCalled()
+  })
+
   it('reactivar también valida el precio: con un precio inválido no llama a la base', async () => {
     const servicio = servicioProductosFalso([
       productoDePrueba({ id: 'p9', nombre: 'Turrón viejo', precio: 400, codigo_barras: '7790099', activo: false }),
