@@ -113,7 +113,6 @@ create table public.turnos (
   check (cierre is null or cierre >= apertura),
   check ((cierre is null) = (cierre_cuenta_id is null))
 );
-create index turnos_negocio_apertura_idx on public.turnos (negocio_id, apertura);
 create unique index turnos_un_abierto_por_dispositivo on public.turnos (dispositivo_id)
   where cierre is null;
 -- ultimo_turno_cerrado.

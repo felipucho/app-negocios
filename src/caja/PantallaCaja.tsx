@@ -1,9 +1,10 @@
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { aCache } from '../catalogo/cache'
 import { crearFiltroDobleLectura } from '../escaner/dobleLectura'
 import { UMBRALES, type Umbrales } from '../escaner/umbrales'
 import { formatearPesos } from '../lib/plata'
 import { AltaRapidaProducto } from '../productos/AltaRapidaProducto'
-import { aProductoCache, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
+import { MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
 import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
 import { AvisoTurnoCerradoSolo, PedirApertura } from '../turno/PantallaTurno'
 import type { AperturaTurno, CierreTurno, TurnoAbierto } from '../turno/turno'
@@ -22,6 +23,7 @@ const ENFOCABLES = 'input, textarea, select, button, a[href], [tabindex]'
 
 export const AVISO_ESCANEO_EN_COBRO =
   'El cobro está abierto: el escaneo no se agregó. Volvé a la venta para agregar productos.'
+export const AVISO_ESCANEO_EN_COMPROBANTE = 'La venta ya se cobró: tocá Nueva venta y volvé a escanear.'
 
 /** Turno de esta PC. La tarea 17 lo arma con leerTurnoAbierto, abrirTurno y leerUltimoTurnoCerrado. */
 export interface ServicioTurno {
@@ -301,7 +303,7 @@ export function PantallaCaja({
       setAviso(AVISO_ESCANEO_EN_COBRO)
       return
     }
-    agregar(aProductoCache(producto), !otroAbierto())
+    agregar(aCache(producto), !otroAbierto())
   }
 
   function altaYaCargada(codigo: string) {
@@ -328,7 +330,7 @@ export function PantallaCaja({
       const reactivado = await productos.editar(producto.id, { activo: true })
       if (inactivoRef.current?.id === producto.id) ponerInactivo(null)
       if (cobroAbiertoRef.current) setAviso(AVISO_ESCANEO_EN_COBRO)
-      else agregar(aProductoCache(reactivado), !otroAbierto())
+      else agregar(aCache(reactivado), !otroAbierto())
     } catch {
       setAviso(`No se pudo reactivar ${producto.nombre}. Probá de nuevo.`)
     } finally {

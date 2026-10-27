@@ -41,7 +41,7 @@ describe('Kiosco', () => {
     ])
     await user.click(screen.getByRole('button', { name: 'Historial' }))
     expect(await screen.findByRole('table', { name: 'Historial' })).toBeInTheDocument()
-    expect(servicios.jefe.leerHistorial).toHaveBeenCalledWith(0)
+    expect(servicios.jefe.leerHistorial).toHaveBeenCalledWith(null)
   })
 
   it('el jefe apaga el fiado y el kiosco se queda con el estado nuevo', async () => {

@@ -63,7 +63,7 @@ export function VentasDelDia({ fecha, servicio, vuelta, alAnular }: PropsVentasD
       setMotivo('')
       alAnular()
     } catch (err) {
-      setErrorAnular(mensajeCajaDelDia(err))
+      setErrorAnular(mensajeCajaDelDia(err, 'No se pudo anular. Revisá la conexión y probá de nuevo.'))
     } finally {
       enCurso.current = false
       setEnviando(false)

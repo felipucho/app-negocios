@@ -63,11 +63,6 @@ export function calcularCobro(e: EntradaCobro): ResultadoCobro {
   return { suma, falta: e.total - suma, vuelto, errores, valido: errores.length === 0 }
 }
 
-/** El efectivo es el resto: total menos los otros medios, nunca negativo. */
-export function efectivoRestante(total: number, otros: Omit<ImportesPorMedio, 'efectivo'>): number {
-  return Math.max(0, total - otros.transferencia - otros.tarjeta - otros.fiado)
-}
-
 /** Lo que viaja a confirmar_venta: sólo medios con importe; cliente sólo en el fiado. */
 export function pagosAEnviar(importes: ImportesPorMedio, clienteFiadoId: string | null): PagoAEnviar[] {
   return MEDIOS.filter((m) => importes[m] > 0).map((m) => ({

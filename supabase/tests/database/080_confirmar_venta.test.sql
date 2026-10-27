@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(39);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'venta-caja@prueba.local'),
@@ -203,6 +203,10 @@ select ok(not has_function_privilege('anon', 'public.confirmar_venta(uuid, uuid,
   'anon no tiene permiso de ejecución');
 select ok(has_function_privilege('authenticated', 'public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)', 'execute'),
   'authenticated sí');
+-- Sin for share, un cambio de precio puede confirmarse entre el control de precios y el insert de lineas_venta.
+select ok(pg_get_functiondef('public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)'::regprocedure)
+            ~ 'from public\.productos p\s+where p\.negocio_id = v_negocio[^;]*\sfor share;',
+  'confirmar_venta toma for share sobre productos: un cambio de precio espera a que termine la venta');
 set local role anon;
 select throws_ok($$ select public.confirmar_venta('a4000000-0000-0000-0000-000000000008', 'a1000000-0000-0000-0000-000000000001',
     '[]', '[]', 1, null) $$,

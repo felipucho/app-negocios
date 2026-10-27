@@ -94,6 +94,8 @@ export function iniciarSentry(
     // SDK 10: sin dataCollection manda sendDefaultPii (V42). false = sin IP, cookies ni datos del usuario.
     sendDefaultPii: false,
     maxBreadcrumbs: 30,
+    // La app atrapa sus fallos y los deja en console.error: sin esto Sentry no los ve.
+    integrations: [Sentry.captureConsoleIntegration({ levels: ['error'] })],
     beforeBreadcrumb(miga) {
       return limpiarMiga(miga) ? miga : null
     },

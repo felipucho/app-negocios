@@ -84,7 +84,7 @@ select is(public.caja_del_dia(public.hoy()) - 'anulaciones' - 'fecha',
   '{"efectivo": 100, "transferencia": 2000, "tarjeta": 400, "cobrado": 2500, "fiado": 1000}'::jsonb,
   'hoy: total por medio con las dos anulaciones de hoy restadas, también la de la venta de ayer');
 select is((public.caja_del_dia(public.hoy()) -> 'anulaciones') - 'detalle',
-  '{"cantidad": 2, "efectivo": 1500, "transferencia": 0, "tarjeta": 0, "fiado": 0, "total": 1500}'::jsonb,
+  '{"cantidad": 2, "total": 1500}'::jsonb,
   'las anulaciones de hoy aparecen aparte');
 select is(jsonb_array_length(public.caja_del_dia(public.hoy()) -> 'anulaciones' -> 'detalle'), 2,
   'con el detalle para revisarlas');

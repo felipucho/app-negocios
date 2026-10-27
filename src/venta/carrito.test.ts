@@ -24,8 +24,7 @@ describe('carritoReducer', () => {
     expect(c.lineas.map((l) => l.precio)).toEqual([1700, 800])
   })
 
-  it('quitar y vaciar', () => {
-    expect(carritoReducer(con(coca, pan), { tipo: 'quitar', productoIds: ['p1'] }).lineas.map((l) => l.productoId)).toEqual(['p2'])
+  it('vaciar deja el carrito en blanco', () => {
     expect(carritoReducer(con(coca, pan), { tipo: 'vaciar' })).toEqual(carritoVacio)
   })
 

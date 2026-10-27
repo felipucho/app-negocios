@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { archivoHeaders, exigirSupabaseDeProduccion, origen, politicaDeContenido } from './headers'
+import { archivoHeaders, exigirClaveAnonDeProduccion, exigirSupabaseDeProduccion, origen, politicaDeContenido } from './headers'
 
 const SUPABASE = 'https://abcd.supabase.co'
 const DSN = 'https://clave123@o111.ingest.us.sentry.io/222'
+
+/** JWT sintético: sólo importa el payload; la firma es basura a propósito. Nunca una clave real. */
+function jwt(payload: object): string {
+  return ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify(payload)).toString('base64url'), 'firma'].join('.')
+}
 
 function directivas(csp: string): Map<string, string> {
   return new Map(
@@ -67,6 +72,25 @@ describe('CSP de _headers', () => {
     expect(() => exigirSupabaseDeProduccion('https://127.0.0.1')).toThrow()
     expect(() => exigirSupabaseDeProduccion('https://[::1]:54321')).toThrow()
     expect(() => exigirSupabaseDeProduccion('abcd.supabase.co')).toThrow()
+  })
+
+  it('build de producción: la clave tiene que ser la pública del proyecto, nunca la service_role ni la demo', () => {
+    expect(() => exigirClaveAnonDeProduccion('sb_publishable_sintetica')).not.toThrow()
+    expect(() => exigirClaveAnonDeProduccion(jwt({ role: 'anon', iss: 'supabase' }))).not.toThrow()
+    const rechazadas = [jwt({ role: 'service_role', iss: 'supabase' }), jwt({ role: 'anon', iss: 'supabase-demo' }), 'sb_secret_sintetica', 'a.b.c', '', undefined]
+    for (const clave of rechazadas) {
+      expect(() => exigirClaveAnonDeProduccion(clave)).toThrow(/VITE_SUPABASE_ANON_KEY/)
+    }
+  })
+
+  it('el error de la clave nunca imprime la clave', () => {
+    const service = jwt({ role: 'service_role', iss: 'supabase' })
+    expect.assertions(1)
+    try {
+      exigirClaveAnonDeProduccion(service)
+    } catch (error) {
+      expect((error as Error).message).not.toContain(service)
+    }
   })
 
   it('una URL de Supabase mal escrita corta el build', () => {

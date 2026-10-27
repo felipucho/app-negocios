@@ -12,7 +12,7 @@
     "test:integracion": "vitest run --config vitest.integracion.config.ts",
     "test:db": "supabase test db",
     "test:e2e": "playwright test",
-    "deploy": "npm run typecheck && vite build --mode production && wrangler deploy"
+    "deploy": "npm run typecheck && npm test && vite build --mode production && wrangler deploy"
   },
   "dependencies": {
     "@sentry/browser": "^10.76.2",

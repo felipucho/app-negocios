@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { codigoDeError } from '../lib/errores'
 import type { Medio } from '../tipos'
 
 export interface TotalesMedios {
@@ -23,7 +24,7 @@ export interface CajaDia extends TotalesMedios {
   fecha: string
   /** Efectivo + transferencia + tarjeta. El fiado no es plata cobrada. */
   cobrado: number
-  anulaciones: TotalesMedios & { cantidad: number; total: number; detalle: AnulacionDelDia[] }
+  anulaciones: { cantidad: number; total: number; detalle: AnulacionDelDia[] }
 }
 
 /** Fila de ventas_del_dia(p_fecha) (tarea 11). Sin datos de clientes. */
@@ -64,9 +65,9 @@ export const MENSAJES_CAJA_DEL_DIA: Record<string, string> = {
   dispositivo_desconocido: 'Esta PC no está registrada en el kiosco. Cerrá sesión y volvé a entrar.',
 }
 
-export function mensajeCajaDelDia(e: unknown): string {
-  const codigo = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : ''
-  return MENSAJES_CAJA_DEL_DIA[codigo] ?? 'No se pudo leer. Revisá la conexión y probá de nuevo.'
+/** porDefecto: lo que se muestra si la base no devuelve un código conocido (cada acción tiene el suyo). */
+export function mensajeCajaDelDia(e: unknown, porDefecto = 'No se pudo leer. Revisá la conexión y probá de nuevo.'): string {
+  return MENSAJES_CAJA_DEL_DIA[codigoDeError(e)] ?? porDefecto
 }
 
 /** Igual a max_rows de supabase/config.toml: una página nunca puede venir cortada por el servidor. */

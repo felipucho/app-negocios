@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { UMBRALES } from '../escaner/umbrales'
+import { escanear, relojDePrueba } from '../test/caja'
 import { productoDePrueba, servicioProductosFalso } from '../test/productos'
 import type { Producto } from '../tipos'
 import { AltaRapidaProducto } from './AltaRapidaProducto'
@@ -54,9 +56,24 @@ describe('AltaRapidaProducto', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('producto desactivado')
     expect(screen.queryByRole('button', { name: 'Guardar y agregar' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Reactivar y agregar' }))
-    expect(servicio.editar).toHaveBeenCalledWith('p9', { activo: true })
+    expect(servicio.editar).toHaveBeenCalledWith('p9', { precio: 450, activo: true })
     expect(servicio.alta).toHaveBeenCalledTimes(1)
-    expect(alListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9', activo: true }))
+    expect(alListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9', precio: 450, activo: true }))
+  })
+
+  it('reactivar también valida el precio: con un precio inválido no llama a la base', async () => {
+    const servicio = servicioProductosFalso([
+      productoDePrueba({ id: 'p9', nombre: 'Turrón viejo', precio: 400, codigo_barras: '7790099', activo: false }),
+    ])
+    servicio.alta.mockRejectedValueOnce(new ErrorProducto('codigo_existente_inactivo', 'p9'))
+    const { user } = armar(servicio)
+    await completar(user, 'Turrón nuevo', '450')
+    await screen.findByRole('button', { name: 'Reactivar y agregar' })
+    await user.clear(screen.getByLabelText('Precio'))
+    await user.type(screen.getByLabelText('Precio'), '0')
+    await user.click(screen.getByRole('button', { name: 'Reactivar y agregar' }))
+    expect(await screen.findByText(/pesos enteros, mayor que cero/)).toBeInTheDocument()
+    expect(servicio.editar).not.toHaveBeenCalled()
   })
 
   it('mientras guarda, otro clic no vuelve a llamar', async () => {
@@ -66,6 +83,29 @@ describe('AltaRapidaProducto', () => {
     await completar(user, 'Turrón', '450')
     await user.click(screen.getByRole('button', { name: 'Guardar y agregar' }))
     expect(servicio.alta).toHaveBeenCalledTimes(1)
+  })
+
+  it('un escaneo con espacio y el foco en Guardar y agregar no guarda el producto', async () => {
+    const servicio = servicioProductosFalso()
+    const reloj = relojDePrueba()
+    const alEscanear = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <AltaRapidaProducto
+        codigo="7790099"
+        servicio={servicio}
+        alListo={vi.fn()}
+        alCancelar={vi.fn()}
+        escaner={{ umbrales: UMBRALES, ahora: reloj.ahora, alEscanear }}
+      />,
+    )
+    await user.type(screen.getByLabelText('Nombre'), 'Turrón')
+    await user.type(screen.getByLabelText('Precio'), '450')
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Guardar y agregar' })).toHaveFocus()
+    await escanear(user, reloj, 'E2E NUEVO')
+    expect(servicio.alta).not.toHaveBeenCalled()
+    expect(alEscanear).toHaveBeenCalledWith('E2E NUEVO', expect.any(Number))
   })
 
   it('Cancelar no guarda nada', async () => {

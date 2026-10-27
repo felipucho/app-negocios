@@ -1,6 +1,7 @@
 import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { aProductoCache, ErrorProducto, MENSAJES_ERROR_PRODUCTO } from '../productos/productos'
+import { aCache } from '../catalogo/cache'
+import { ErrorProducto, MENSAJES_ERROR_PRODUCTO } from '../productos/productos'
 import { armarCaja, escanear, PRODUCTOS_DE_PRUEBA, TURRON_VIEJO, type Usuario } from '../test/caja'
 import { productoDePrueba, servicioProductosFalso } from '../test/productos'
 import type { Producto } from '../tipos'
@@ -108,7 +109,7 @@ describe('PantallaCaja: alta rápida y reactivar', () => {
     // Otra caja lo cargó: la base rechaza el alta y el catálogo se actualiza.
     servicio.alta.mockImplementation(async () => {
       productos.push(
-        aProductoCache(productoDePrueba({ id: 'p99', nombre: 'Turrón de otra caja', precio: 450, codigo_barras: '7790099' })),
+        aCache(productoDePrueba({ id: 'p99', nombre: 'Turrón de otra caja', precio: 450, codigo_barras: '7790099' })),
       )
       throw new ErrorProducto('codigo_existente', 'p99')
     })

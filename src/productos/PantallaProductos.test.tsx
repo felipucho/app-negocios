@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { productoDePrueba, servicioProductosFalso } from '../test/productos'
 import type { Producto } from '../tipos'
 import { PantallaProductos } from './PantallaProductos'
+import { ErrorProducto } from './productos'
 
 const PRODUCTOS = [
   productoDePrueba({ id: 'p1', nombre: 'Alfajor triple', precio: 900, codigo_barras: '7790001' }),
@@ -107,4 +108,22 @@ describe('PantallaProductos', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('pesos enteros, mayor que cero')
     expect(servicio.editar).not.toHaveBeenCalled()
   })
+
+  it.each(['codigo_existente', 'codigo_existente_inactivo'] as const)(
+    '%s: vuelve a leer la lista, porque el producto pudo darse de alta en otra PC',
+    async (codigo) => {
+      const { servicio, user } = armar()
+      await screen.findByRole('row', { name: /Chipá/ })
+      const otraPc = productoDePrueba({ id: 'p5', nombre: 'Turrón de otra PC', precio: 450, codigo_barras: '7790099', creado_en_caja: true })
+      servicio.listar.mockResolvedValue([...PRODUCTOS, otraPc])
+      servicio.alta.mockRejectedValueOnce(new ErrorProducto(codigo))
+      await user.click(screen.getByRole('button', { name: 'Agregar producto' }))
+      const alta = screen.getByRole('form', { name: 'Nuevo producto' })
+      await user.type(within(alta).getByLabelText('Nombre'), 'Turrón')
+      await user.type(within(alta).getByLabelText('Precio'), '450')
+      await user.type(within(alta).getByLabelText('Código de barras (opcional)'), '7790099')
+      await user.click(within(alta).getByRole('button', { name: 'Guardar producto' }))
+      expect(await screen.findByRole('row', { name: /Turrón de otra PC/ })).toBeInTheDocument()
+    },
+  )
 })

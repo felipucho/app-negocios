@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   calcularCobro,
-  efectivoRestante,
   esPesoEntero,
   pagosAEnviar,
   type EntradaCobro,
@@ -104,16 +103,6 @@ describe('calcularCobro', () => {
     const r = calcularCobro(entrada({ total: 0, importes: importes({}) }))
     expect(r.errores).toEqual(['venta_vacia'])
     expect(r.valido).toBe(false)
-  })
-})
-
-describe('efectivoRestante', () => {
-  it('el efectivo es lo que falta después de los otros medios', () => {
-    expect(efectivoRestante(3000, { transferencia: 0, tarjeta: 1000, fiado: 500 })).toBe(1500)
-  })
-
-  it('nunca es negativo', () => {
-    expect(efectivoRestante(1000, { transferencia: 2000, tarjeta: 0, fiado: 0 })).toBe(0)
   })
 })
 

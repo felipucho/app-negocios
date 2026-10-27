@@ -3,7 +3,7 @@ import type { Cuenta } from '../auth/cuenta'
 import type { ResultadoLogin, SesionAuth } from '../auth/useSesion'
 import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/servicioCajaDelDia'
 import type { FilaRanking } from '../caja/ranking'
-import type { FilaHistorial } from '../jefe/jefe'
+import type { CursorHistorial, FilaHistorial } from '../jefe/jefe'
 import type { ConfigNegocio, EstadoAbono } from '../negocio/config'
 import type { ClienteCaja } from '../pagos/clientes'
 import type { Servicios } from '../servicios'
@@ -22,7 +22,7 @@ const CAJA_VACIA: CajaDia = {
   fecha: '2026-10-19',
   ...SIN_TOTALES,
   cobrado: 0,
-  anulaciones: { ...SIN_TOTALES, cantidad: 0, total: 0, detalle: [] },
+  anulaciones: { cantidad: 0, total: 0, detalle: [] },
 }
 
 /** Auth en memoria. iniciar entra como u-jefe si el email es jefe@kiosco.local; si no, como u-caja. */
@@ -110,7 +110,7 @@ export function serviciosFalsos(
     jefe: {
       cambiarModuloFiado: vi.fn(async (activo: boolean) => activo),
       anonimizarCliente: vi.fn(async (id: string): Promise<Cliente> => ({ id, nombre: 'Cliente suprimido', telefono: null })),
-      leerHistorial: vi.fn(async (_desde: number): Promise<FilaHistorial[]> => []),
+      leerHistorial: vi.fn(async (_despuesDe: CursorHistorial | null): Promise<FilaHistorial[]> => []),
     },
     leerConfig: vi.fn(async (): Promise<ConfigNegocio | null> => opciones.config ?? null),
     leerEstadoAbono: vi.fn(async (): Promise<EstadoAbono | null> =>

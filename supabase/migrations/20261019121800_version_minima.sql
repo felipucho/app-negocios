@@ -5,8 +5,7 @@
 
 create table public.version_app (
   id boolean primary key default true check (id),
-  version_minima text not null check (version_minima ~ '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$'),
-  actualizado timestamptz not null default now()
+  version_minima text not null check (version_minima ~ '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$')
 );
 
 insert into public.version_app (version_minima) values ('0.0.0');

@@ -8,7 +8,6 @@ export interface Carrito {
 export type AccionCarrito =
   | { tipo: 'agregar'; producto: Pick<Producto, 'id' | 'nombre' | 'precio'> }
   | { tipo: 'cambiarCantidad'; productoId: string; delta: 1 | -1 }
-  | { tipo: 'quitar'; productoIds: string[] }
   | { tipo: 'actualizarPrecios'; precios: Record<string, number> }
   | { tipo: 'vaciar' }
 
@@ -30,8 +29,6 @@ export function carritoReducer(c: Carrito, a: AccionCarrito): Carrito {
           .map((l) => (l.productoId === a.productoId ? { ...l, cantidad: l.cantidad + a.delta } : l))
           .filter((l) => l.cantidad > 0),
       }
-    case 'quitar':
-      return { lineas: c.lineas.filter((l) => !a.productoIds.includes(l.productoId)) }
     case 'actualizarPrecios':
       return {
         lineas: c.lineas.map((l) => (l.productoId in a.precios ? { ...l, precio: a.precios[l.productoId] } : l)),

@@ -8,6 +8,7 @@ import { Calibracion } from './escaner/Calibracion'
 import { AnonimizarCliente } from './jefe/AnonimizarCliente'
 import { ModuloFiado } from './jefe/ModuloFiado'
 import { PantallaHistorial } from './jefe/PantallaHistorial'
+import { codigoDeError } from './lib/errores'
 import { AvisoAbono } from './negocio/AvisoAbono'
 import { aplicarConfig, type ConfigNegocio, type EstadoAbono } from './negocio/config'
 import { PantallaPagos } from './pagos/PantallaPagos'
@@ -101,7 +102,7 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
       setCierre(await porPc.turno.cerrar())
       setSeccion('caja')
     } catch (e) {
-      const sinTurno = typeof e === 'object' && e !== null && 'message' in e && e.message === 'sin_turno'
+      const sinTurno = codigoDeError(e) === 'sin_turno'
       if (sinTurno) {
         // Ya estaba cerrado (quizás se perdió la respuesta del cierre): la caja nueva lee la base y
         // muestra "No hay turno abierto" con los totales del último cierre.

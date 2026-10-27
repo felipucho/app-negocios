@@ -14,10 +14,6 @@ const CAJA: CajaDia = {
   fiado: 700,
   anulaciones: {
     cantidad: 1,
-    efectivo: 900,
-    transferencia: 0,
-    tarjeta: 0,
-    fiado: 0,
     total: 900,
     detalle: [
       { venta_id: 'v9', prefijo: 'A', numero: 9, fecha_venta: '2026-10-18T15:00:00Z', fecha: '2026-10-19T13:00:00Z', total: 900, motivo: 'Se cobró dos veces' },
@@ -118,6 +114,16 @@ describe('CajaDelDia', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Para anular, abrí el turno en esta PC.')
     expect(screen.getByRole('form', { name: 'Anular venta' })).toBeInTheDocument()
     expect(servicio.leerCaja).toHaveBeenCalledTimes(1)
+  })
+
+  it('si la anulación falla por la red, dice que no se pudo anular (no que no se pudo leer)', async () => {
+    const servicio = servicioFalso()
+    servicio.anular.mockRejectedValueOnce(new Error('Failed to fetch'))
+    const { user } = armar('jefe', servicio)
+    await user.click(await screen.findByRole('button', { name: 'Anular A-000012' }))
+    await user.type(screen.getByLabelText('Motivo'), 'Devolución del cliente')
+    await user.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo anular. Revisá la conexión y probá de nuevo.')
   })
 
   it('una venta anulada se marca y no ofrece anular', async () => {

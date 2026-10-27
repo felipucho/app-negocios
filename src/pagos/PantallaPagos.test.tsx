@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { AVISO_ESCANEO_EN_COBRO, type SesionCobro } from '../caja/PantallaCaja'
+import { AVISO_ESCANEO_EN_COBRO, AVISO_ESCANEO_EN_COMPROBANTE, type SesionCobro } from '../caja/PantallaCaja'
 import { escanear, relojDePrueba, tipear } from '../test/caja'
 import type { LineaCarrito } from '../tipos'
 import type { RespuestaRpc } from '../venta/confirmar'
@@ -12,10 +12,10 @@ import { PantallaPagos } from './PantallaPagos'
 const LINEAS: LineaCarrito[] = [{ productoId: 'p1', nombre: 'Alfajor triple', precio: 900, cantidad: 2 }]
 const JUAN: ClienteCaja = { id: 'cli-1', nombre: 'Juan del 5to' }
 
-function sesionDePrueba(): SesionCobro {
+function sesionDePrueba(lineas: LineaCarrito[] = LINEAS): SesionCobro {
   let n = 0
   return {
-    lineas: LINEAS,
+    lineas,
     total: 1800,
     ids: crearIdVenta(() => `id-${++n}`),
     volver: vi.fn(),
@@ -48,8 +48,8 @@ function rpcCon(...respuestas: RespuestaRpc[]) {
   )
 }
 
-function armar(opciones: { rpc?: ReturnType<typeof rpcCon>; fiado?: boolean } = {}) {
-  const sesion = sesionDePrueba()
+function armar(opciones: { rpc?: ReturnType<typeof rpcCon>; fiado?: boolean; lineas?: LineaCarrito[] } = {}) {
+  const sesion = sesionDePrueba(opciones.lineas)
   const clientes = clientesDePrueba()
   const rpc = opciones.rpc ?? rpcCon(confirmada(123))
   const reloj = relojDePrueba()
@@ -425,10 +425,128 @@ describe('PantallaPagos', () => {
     expect(nueva).toHaveFocus()
     await escanear(user, reloj, '7790001')
     expect(sesion.nuevaVenta).not.toHaveBeenCalled()
-    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COMPROBANTE)
     expect(screen.getByRole('heading', { name: 'Venta A-000123' })).toBeInTheDocument()
     reloj.tipeo()
     await user.keyboard('{Enter}')
     expect(sesion.nuevaVenta).toHaveBeenCalledTimes(1)
+  })
+
+  it('un escaneo con el foco en Confirmar no confirma: avisa y la venta no se graba', async () => {
+    const { user, reloj, rpc, sesion } = armar({ fiado: false })
+    await user.click(screen.getByLabelText('Entrega en efectivo'))
+    await tipear(user, reloj, '2000')
+    await user.tab()
+    expect(botonConfirmar()).toHaveFocus()
+    await escanear(user, reloj, '7790001')
+    expect(rpc).not.toHaveBeenCalled()
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+    expect(screen.queryByRole('heading', { name: /^Venta A-/ })).toBeNull()
+  })
+
+  it('un escaneo con el foco en una opción de cliente no la elige', async () => {
+    const { user, reloj, sesion } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    await user.click(screen.getByLabelText('Fiado'))
+    const juan = await screen.findByRole('button', { name: 'Juan del 5to' })
+    juan.focus()
+    await escanear(user, reloj, '7790001')
+    expect(juan).toBeInTheDocument()
+    expect(botonConfirmar()).toHaveAttribute('aria-disabled', 'true')
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('un escaneo con espacio y el foco en Confirmar no confirma la venta', async () => {
+    const { user, reloj, rpc, sesion } = armar({ fiado: false })
+    await user.click(screen.getByLabelText('Entrega en efectivo'))
+    await tipear(user, reloj, '2000')
+    await user.tab()
+    expect(botonConfirmar()).toHaveFocus()
+    await escanear(user, reloj, 'E2E ALF')
+    expect(rpc).not.toHaveBeenCalled()
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('un escaneo con el foco en el buscador de clientes deshace lo tipeado ahí', async () => {
+    const { user, reloj, sesion } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    await user.click(screen.getByLabelText('Fiado'))
+    const buscar = await screen.findByLabelText('Buscar cliente')
+    await user.click(buscar)
+    await tipear(user, reloj, 'Jua')
+    await escanear(user, reloj, '7790001')
+    expect(buscar).toHaveValue('Jua')
+    expect(await screen.findByRole('button', { name: 'Juan del 5to' })).toBeInTheDocument()
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('un escaneo con el foco en el nombre del alta de cliente deshace lo tipeado ahí', async () => {
+    const { user, reloj, sesion } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    await user.click(screen.getByLabelText('Fiado'))
+    await user.click(await screen.findByRole('button', { name: 'Nuevo cliente' }))
+    const nombre = screen.getByLabelText(/Nombre o alias/)
+    await user.click(nombre)
+    await tipear(user, reloj, 'Ana')
+    await escanear(user, reloj, '7790001')
+    expect(nombre).toHaveValue('Ana')
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('el buscador de clientes arranca vacío cada vez que el fiado vuelve a mostrarse', async () => {
+    const { user } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    await user.click(screen.getByLabelText('Fiado'))
+    await user.type(await screen.findByLabelText('Buscar cliente'), 'Jua')
+    await user.clear(screen.getByLabelText('Fiado'))
+    await user.type(screen.getByLabelText('Fiado'), '500')
+    expect(await screen.findByLabelText('Buscar cliente')).toHaveValue('')
+  })
+
+  it('un escaneo en un medio deshace lo tipeado en ese medio', async () => {
+    const { user, reloj, sesion } = armar()
+    await user.clear(screen.getByLabelText('Efectivo'))
+    const tarjeta = screen.getByLabelText('Tarjeta')
+    await user.click(tarjeta)
+    await tipear(user, reloj, '1000')
+    await escanear(user, reloj, '7790001')
+    expect(tarjeta).toHaveValue('1000')
+    expect(sesion.avisar).toHaveBeenCalledWith(AVISO_ESCANEO_EN_COBRO)
+  })
+
+  it('Ctrl o Alt con dígitos no cuentan como escaneo (mismo criterio que CampoEscaneo)', async () => {
+    const { user, reloj, sesion } = armar()
+    await user.click(screen.getByLabelText('Entrega en efectivo'))
+    await tipear(user, reloj, '2000')
+    reloj.escaner()
+    await user.keyboard('{Control>}1{/Control}{Control>}2{/Control}{Alt>}3{/Alt}{Alt>}4{/Alt}{Enter}')
+    expect(sesion.avisar).not.toHaveBeenCalled()
+  })
+
+  it('producto_no_disponible nombra el producto, pone al día la caché y no toca el carrito', async () => {
+    const noVendible: RespuestaRpc = { data: null, error: { message: 'producto_no_disponible', code: 'P0001', details: '["p1"]' } }
+    const { user, sesion, alCambiarPrecios } = armar({ rpc: rpcCon(noVendible) })
+    await user.click(botonConfirmar())
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ya no está a la venta: Alfajor triple. Volvé a la venta y quitalo.')
+    expect(alCambiarPrecios).toHaveBeenCalledTimes(1)
+    expect(sesion.actualizarPrecios).not.toHaveBeenCalled()
+  })
+
+  it('producto_no_disponible con varios productos los nombra en plural', async () => {
+    const noVendibles: RespuestaRpc = { data: null, error: { message: 'producto_no_disponible', code: 'P0001', details: '["p1","p2"]' } }
+    const dos: LineaCarrito[] = [...LINEAS, { productoId: 'p2', nombre: 'Agua mineral', precio: 1200, cantidad: 1 }]
+    const { user } = armar({ rpc: rpcCon(noVendibles), lineas: dos })
+    await user.click(botonConfirmar())
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ya no están a la venta: Alfajor triple, Agua mineral. Volvé a la venta y quitalos.',
+    )
+  })
+
+  it('producto_no_disponible sin detalle legible: texto genérico, y la caché se pone al día igual', async () => {
+    const noVendible: RespuestaRpc = { data: null, error: { message: 'producto_no_disponible', code: 'P0001', details: 'no es json' } }
+    const { user, alCambiarPrecios } = armar({ rpc: rpcCon(noVendible) })
+    await user.click(botonConfirmar())
+    expect(await screen.findByRole('alert')).toHaveTextContent('Un producto ya no está disponible. Volvé a la venta y quitalo.')
+    expect(alCambiarPrecios).toHaveBeenCalledTimes(1)
   })
 })

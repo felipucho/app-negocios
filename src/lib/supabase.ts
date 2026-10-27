@@ -8,4 +8,7 @@ if (!url || !anonKey) throw new Error('Faltan VITE_SUPABASE_URL o VITE_SUPABASE_
 export const CLAVE_SESION = 'kiosco-sesion'
 
 /** Cliente único de la app. Sólo la anon key: la service role nunca llega al navegador. */
-export const supabase = createClient(url, anonKey, { auth: { storageKey: CLAVE_SESION } })
+export const supabase = createClient(url, anonKey, {
+  // Un enlace con #access_token no inicia sesión: la app no usa flujos por URL.
+  auth: { storageKey: CLAVE_SESION, detectSessionInUrl: false },
+})

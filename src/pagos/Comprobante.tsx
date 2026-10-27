@@ -1,6 +1,3 @@
-import { useRef, type KeyboardEvent } from 'react'
-import { detectarEscaneo, type Pulsacion } from '../escaner/detector'
-import type { Umbrales } from '../escaner/umbrales'
 import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
 import { NOMBRE_MEDIO, type LineaCarrito } from '../tipos'
@@ -14,30 +11,10 @@ export interface PropsComprobante {
   alNuevaVenta(): void
   /** Venta anulada en el reintento: vuelve a la venta con el carrito intacto (el id ya salió nuevo). */
   alCobrarDeNuevo?(): void
-  umbrales: Umbrales
-  ahora?: () => number
-  /** Un escaneo con el comprobante a la vista se ignora y la caja avisa. */
-  alEscaneo(): void
 }
 
 /** Sólo en pantalla, no se imprime (spec sección 6). El fiado se muestra sin el nombre del cliente. */
-export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuevo, umbrales, ahora, alEscaneo }: PropsComprobante) {
-  const pulsaciones = useRef<Pulsacion[]>([])
-
-  // El Enter final del escáner caería en "Nueva venta" (tiene el foco): si es un escaneo, no se activa.
-  function alTecla(e: KeyboardEvent<HTMLButtonElement>) {
-    const t = ahora ? ahora() : e.timeStamp
-    if (e.key === 'Enter') {
-      if (detectarEscaneo(pulsaciones.current, t, umbrales)) {
-        e.preventDefault()
-        alEscaneo()
-      }
-      pulsaciones.current = []
-      return
-    }
-    if (e.key.length === 1) pulsaciones.current = [...pulsaciones.current, { tecla: e.key, t }].slice(-64)
-  }
-
+export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuevo }: PropsComprobante) {
   return (
     <section className="comprobante" aria-label="Comprobante">
       <h2>Venta {formatearNumeroVenta(venta.prefijo, venta.numero)}</h2>
@@ -77,7 +54,7 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuev
           Vuelto <strong>{formatearPesos(venta.vuelto)}</strong>
         </p>
       )}
-      <button type="button" autoFocus onClick={alNuevaVenta} onKeyDown={alTecla}>
+      <button type="button" autoFocus onClick={alNuevaVenta}>
         Nueva venta
       </button>
       {venta.anulada && alCobrarDeNuevo && (

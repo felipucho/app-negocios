@@ -16,7 +16,6 @@ declare
   v_hasta timestamptz;
   v_totales jsonb;
   v_anulaciones jsonb;
-  v_detalle jsonb;
 begin
   if v_rol is null then
     raise exception 'sin_cuenta' using errcode = 'P0001';
@@ -54,30 +53,21 @@ begin
   into v_totales
   from movimientos m;
 
-  -- Anulaciones del día, aparte, para revisarlas.
+  -- Anulaciones del día, aparte, para revisarlas: cantidad, total (ventas.total) y detalle, en una consulta.
   select jsonb_build_object(
-    'cantidad', count(distinct a.id),
-    'efectivo', coalesce(sum(pv.importe) filter (where pv.medio = 'efectivo'), 0),
-    'transferencia', coalesce(sum(pv.importe) filter (where pv.medio = 'transferencia'), 0),
-    'tarjeta', coalesce(sum(pv.importe) filter (where pv.medio = 'tarjeta'), 0),
-    'fiado', coalesce(sum(pv.importe) filter (where pv.medio = 'fiado'), 0),
-    'total', coalesce(sum(pv.importe), 0)
+    'cantidad', count(*),
+    'total', coalesce(sum(v.total), 0),
+    'detalle', coalesce(jsonb_agg(jsonb_build_object(
+                 'venta_id', v.id,
+                 'prefijo', d.prefijo,
+                 'numero', v.numero,
+                 'fecha_venta', v.fecha,
+                 'fecha', a.fecha,
+                 'total', v.total,
+                 'motivo', a.motivo
+               ) order by a.fecha, v.numero), '[]'::jsonb)
   )
   into v_anulaciones
-  from public.anulaciones a
-  join public.pagos_venta pv on pv.venta_id = a.venta_id and pv.negocio_id = v_negocio
-  where a.negocio_id = v_negocio and a.fecha >= v_desde and a.fecha < v_hasta;
-
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'venta_id', v.id,
-           'prefijo', d.prefijo,
-           'numero', v.numero,
-           'fecha_venta', v.fecha,
-           'fecha', a.fecha,
-           'total', v.total,
-           'motivo', a.motivo
-         ) order by a.fecha, v.numero), '[]'::jsonb)
-  into v_detalle
   from public.anulaciones a
   join public.ventas v on v.id = a.venta_id and v.negocio_id = v_negocio
   join public.dispositivos d on d.id = v.dispositivo_id
@@ -85,7 +75,7 @@ begin
 
   return v_totales || jsonb_build_object(
     'fecha', p_fecha,
-    'anulaciones', v_anulaciones || jsonb_build_object('detalle', v_detalle)
+    'anulaciones', v_anulaciones
   );
 end;
 $$;

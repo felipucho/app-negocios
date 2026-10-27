@@ -20,6 +20,27 @@ export function exigirSupabaseDeProduccion(url: string): void {
 }
 
 /**
+ * Tira error si la clave no es la pública de un proyecto real: sb_publishable_ o un JWT con role anon
+ * que no sea la demo local (iss supabase-demo, viene de .env.local). La service_role nunca puede llegar al bundle.
+ * El mensaje nunca incluye la clave.
+ */
+export function exigirClaveAnonDeProduccion(clave: string | undefined): void {
+  if (clave?.startsWith('sb_publishable_')) return
+  const partes = clave?.split('.') ?? []
+  let datos: { role?: unknown; iss?: unknown } | null = null
+  try {
+    if (partes.length === 3) datos = JSON.parse(Buffer.from(partes[1], 'base64url').toString('utf8'))
+  } catch {
+    // No es un JWT: cae en el error de abajo.
+  }
+  if (datos?.role === 'anon' && datos.iss !== 'supabase-demo') return
+  throw new Error(
+    'VITE_SUPABASE_ANON_KEY de producción tiene que ser la clave pública del proyecto (anon o sb_publishable_), ' +
+      'nunca la service_role ni la demo local (¿falta .env.production.local?)',
+  )
+}
+
+/**
  * CSP: scripts y estilos sólo propios (sin 'unsafe-inline'); red sólo a la app, Supabase y Sentry;
  * imágenes propias, data: y Supabase (logos); nadie puede meter la app en un iframe.
  */

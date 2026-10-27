@@ -151,9 +151,16 @@ select ok(has_function_privilege('authenticated', 'public.anular_venta(uuid, uui
 
 -- Sin poder correr dos transacciones a la vez en pgTAP: si se pierde este bloqueo, una anulación puede
 -- entrar al turno después de que cerrar_turno calculó sus totales y no la resta ningún cierre.
-select ok(pg_get_functiondef('public.anular_venta(uuid, uuid, text)'::regprocedure)
-            ~ 'from public\.dispositivos d\s+where d\.id = p_dispositivo_id and d\.negocio_id = v_negocio\s+for update',
-  'anular_venta bloquea la PC como cerrar_turno');
+-- Lo mismo para abrir_turno (choca con el índice de turno abierto) y confirmar_venta (la venta entra en un turno ya totalizado).
+select ok((
+  select bool_and(pg_get_functiondef(f) ~ 'from public\.dispositivos d\s+where d\.id = p_dispositivo_id and d\.negocio_id = v_negocio\s+for update')
+  from unnest(array[
+    'public.anular_venta(uuid, uuid, text)'::regprocedure,
+    'public.cerrar_turno(uuid)'::regprocedure,
+    'public.abrir_turno(uuid)'::regprocedure,
+    'public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)'::regprocedure
+  ]) f
+), 'anular_venta, cerrar_turno, abrir_turno y confirmar_venta bloquean la PC (for update)');
 
 select * from finish();
 rollback;

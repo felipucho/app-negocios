@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
-import { crearServicioProductos, ErrorProducto, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto } from './productos'
+import { crearServicioProductos, ErrorProducto, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, validarProducto } from './productos'
 
 type Respuesta = { data: unknown; error: { message: string; details?: string | null } | null }
 
@@ -65,5 +65,19 @@ describe('crearServicioProductos', () => {
     await expect(promesa).rejects.toBeInstanceOf(ErrorProducto)
     expect(mensajeErrorProducto(await promesa.catch((e: unknown) => e))).toBe(MENSAJES_ERROR_PRODUCTO.desconocido)
     expect(alCambiar).not.toHaveBeenCalled()
+  })
+})
+
+describe('validarProducto', () => {
+  it('recorta el nombre y lee el precio en pesos enteros', () => {
+    expect(validarProducto('  Turrón nuevo ', '1.450')).toEqual({ nombre: 'Turrón nuevo', precio: 1450 })
+  })
+
+  it('sin nombre avisa aunque el precio también esté mal', () => {
+    expect(validarProducto('   ', '0')).toEqual({ error: MENSAJES_ERROR_PRODUCTO.nombre_invalido })
+  })
+
+  it.each(['', '0', '10,5', 'abc'])('precio "%s" no es pesos enteros mayores que cero', (precio) => {
+    expect(validarProducto('Turrón', precio)).toEqual({ error: MENSAJES_ERROR_PRODUCTO.precio_invalido })
   })
 })

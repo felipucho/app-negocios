@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { codigoDeError } from '../lib/errores'
 import type { Cliente } from '../tipos'
 
 export type TipoHistorial =
@@ -46,16 +47,22 @@ export interface FilaHistorial {
 
 export const PAGINA_HISTORIAL = 100
 
+/** Última fila vista: la página siguiente son las filas anteriores a ella, en orden (fecha, id) descendente. */
+export interface CursorHistorial {
+  fecha: string
+  id: string
+}
+
 export interface ServicioJefe {
   /** cambiar_modulo_fiado (tarea 16). Devuelve el estado que quedó. */
   cambiarModuloFiado(activo: boolean): Promise<boolean>
   /** anonimizar_cliente (tarea 16). Irreversible. */
   anonimizarCliente(clienteId: string): Promise<Cliente>
-  /** De a PAGINA_HISTORIAL filas, más nuevas primero. */
-  leerHistorial(desde: number): Promise<FilaHistorial[]>
+  /** De a PAGINA_HISTORIAL filas, más nuevas primero: sin cursor, la primera página; con cursor, las que siguen. */
+  leerHistorial(despuesDe: CursorHistorial | null): Promise<FilaHistorial[]>
 }
 
-export const MENSAJES_JEFE: Record<string, string> = {
+const MENSAJES_JEFE: Record<string, string> = {
   solo_jefe: 'Sólo el jefe puede hacer esto.',
   sin_cuenta: 'Esta cuenta no está vinculada a este kiosco.',
   cliente_desconocido: 'Ese cliente no existe en este kiosco.',
@@ -63,8 +70,7 @@ export const MENSAJES_JEFE: Record<string, string> = {
 }
 
 export function mensajeJefe(e: unknown): string {
-  const codigo = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : ''
-  return MENSAJES_JEFE[codigo] ?? 'No se pudo guardar. Revisá la conexión y probá de nuevo.'
+  return MENSAJES_JEFE[codigoDeError(e)] ?? 'No se pudo guardar. Revisá la conexión y probá de nuevo.'
 }
 
 export function aFilaHistorial(
@@ -100,17 +106,24 @@ export function crearServicioJefe(supabase: SupabaseClient): ServicioJefe {
       if (error) throw error
       return data as Cliente
     },
-    async leerHistorial(desde) {
+    async leerHistorial(despuesDe) {
       // RLS: el historial lo ve sólo el jefe; de cuentas, sólo la propia fila.
+      let historial = supabase
+        .from('historial')
+        .select('id, tipo, fecha, cuenta_id, dispositivo_id, entidad, entidad_id, valor_anterior, valor_nuevo, motivo')
+        .order('fecha', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(PAGINA_HISTORIAL)
+      // Con cursor, la página son las filas anteriores a la última vista: un desplazamiento repetía filas
+      // cuando entraba un alta masiva entre dos "Ver más". Las comillas hacen falta: la fecha lleva + y :.
+      if (despuesDe) {
+        const { fecha, id } = despuesDe
+        historial = historial.or(`fecha.lt."${fecha}",and(fecha.eq."${fecha}",id.lt."${id}")`)
+      }
       const [propia, pcs, pagina] = await Promise.all([
         supabase.from('cuentas').select('usuario_id').single(),
         supabase.from('dispositivos').select('id, prefijo'),
-        supabase
-          .from('historial')
-          .select('id, tipo, fecha, cuenta_id, dispositivo_id, entidad, entidad_id, valor_anterior, valor_nuevo, motivo')
-          .order('fecha', { ascending: false })
-          .order('id', { ascending: false })
-          .range(desde, desde + PAGINA_HISTORIAL - 1),
+        historial,
       ])
       if (propia.error) throw propia.error
       if (pcs.error) throw pcs.error

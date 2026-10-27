@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { normalizar } from '../catalogo/normalizar'
+import { codigoDeError } from '../lib/errores'
 import type { ClienteCaja, ServicioClientes } from './clientes'
 
 const MAX_CLIENTES = 8
@@ -16,16 +17,27 @@ export interface PropsSelectorCliente {
   alElegir(cliente: ClienteCaja | null): void
   /** El botón tocado se desmonta: sin esto el foco cae al body y un escaneo se pierde sin aviso. */
   devolverFoco(): void
+  /** Los guarda la pantalla: un escaneo con el foco en el buscador o en el alta lo deshace como a un importe. */
+  filtro: string
+  alCambiarFiltro(filtro: string): void
+  datosAlta: { nombre: string; telefono: string }
+  alCambiarDatosAlta(campo: 'nombre' | 'telefono', valor: string): void
 }
 
 /** Sólo existe con el módulo fiado activo (lo decide PantallaPagos). Muestra sólo el nombre. */
-export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: PropsSelectorCliente) {
+export function SelectorCliente({
+  servicio,
+  elegido,
+  alElegir,
+  devolverFoco,
+  filtro,
+  alCambiarFiltro,
+  datosAlta,
+  alCambiarDatosAlta,
+}: PropsSelectorCliente) {
   const [clientes, setClientes] = useState<ClienteCaja[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [filtro, setFiltro] = useState('')
   const [alta, setAlta] = useState(false)
-  const [nombre, setNombre] = useState('')
-  const [telefono, setTelefono] = useState('')
   const [guardando, setGuardando] = useState(false)
   const campoNombre = useRef<HTMLInputElement>(null)
 
@@ -55,15 +67,14 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
     setGuardando(true)
     setError(null)
     try {
-      const nuevo = await servicio.alta(nombre.trim(), telefono.trim() === '' ? null : telefono.trim())
+      const nuevo = await servicio.alta(datosAlta.nombre.trim(), datosAlta.telefono.trim() === '' ? null : datosAlta.telefono.trim())
       setClientes((lista) => [...(lista ?? []), nuevo])
       setAlta(false)
-      setNombre('')
-      setTelefono('')
+      alCambiarDatosAlta('nombre', '')
+      alCambiarDatosAlta('telefono', '')
       elegir(nuevo)
     } catch (e) {
-      const codigo = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : ''
-      setError(ERRORES_ALTA[codigo] ?? 'No se pudo dar de alta el cliente.')
+      setError(ERRORES_ALTA[codigoDeError(e)] ?? 'No se pudo dar de alta el cliente.')
       campoNombre.current?.focus()
     } finally {
       setGuardando(false)
@@ -90,7 +101,7 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
     <fieldset className="selector-cliente">
       <legend>Cliente del fiado</legend>
       <label>
-        Buscar cliente <input value={filtro} onChange={(e) => setFiltro(e.target.value)} autoComplete="off" />
+        Buscar cliente <input name="buscarCliente" value={filtro} onChange={(e) => alCambiarFiltro(e.target.value)} autoComplete="off" />
       </label>
       {clientes === null && !error && <p>Cargando clientes…</p>}
       <ul aria-label="Clientes">
@@ -106,11 +117,24 @@ export function SelectorCliente({ servicio, elegido, alElegir, devolverFoco }: P
         <div className="alta-cliente">
           <label>
             Nombre o alias{' '}
-            <input ref={campoNombre} value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="off" autoFocus />
+            <input
+              ref={campoNombre}
+              name="nombreCliente"
+              value={datosAlta.nombre}
+              onChange={(e) => alCambiarDatosAlta('nombre', e.target.value)}
+              autoComplete="off"
+              autoFocus
+            />
           </label>
           <label>
             Teléfono (opcional){' '}
-            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} inputMode="tel" autoComplete="off" />
+            <input
+              name="telefonoCliente"
+              value={datosAlta.telefono}
+              onChange={(e) => alCambiarDatosAlta('telefono', e.target.value)}
+              inputMode="tel"
+              autoComplete="off"
+            />
           </label>
           {/* aria-disabled y no disabled: un botón con foco que pasa a disabled deja el foco en <body> (decisión 13). */}
           <button type="button" onClick={() => void darDeAlta()} aria-disabled={guardando}>

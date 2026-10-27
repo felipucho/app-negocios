@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
-import { PAGINA_HISTORIAL, type FilaHistorial, type QuienHistorial, type ServicioJefe, type TipoHistorial } from './jefe'
+import {
+  PAGINA_HISTORIAL,
+  type CursorHistorial,
+  type FilaHistorial,
+  type QuienHistorial,
+  type ServicioJefe,
+  type TipoHistorial,
+} from './jefe'
 
 const TITULO: Record<TipoHistorial, string> = {
   alta_producto: 'Alta de producto',
@@ -61,15 +68,12 @@ export function PantallaHistorial({ servicio }: PropsPantallaHistorial) {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  async function cargar(desde: number) {
+  async function cargar(despuesDe: CursorHistorial | null) {
     setCargando(true)
     setError(null)
     try {
-      const pagina = await servicio.leerHistorial(desde)
-      // Una fila nueva entre páginas corre el offset y repite la última: se descarta por id.
-      setFilas((actuales) =>
-        desde === 0 ? pagina : [...actuales, ...pagina.filter((f) => !actuales.some((a) => a.id === f.id))],
-      )
+      const pagina = await servicio.leerHistorial(despuesDe)
+      setFilas((actuales) => (despuesDe === null ? pagina : [...actuales, ...pagina]))
       setHayMas(pagina.length === PAGINA_HISTORIAL)
     } catch {
       setError('No se pudo leer el historial. Revisá la conexión.')
@@ -78,8 +82,14 @@ export function PantallaHistorial({ servicio }: PropsPantallaHistorial) {
     }
   }
 
+  /** La página siguiente sigue a la última fila vista (ver leerHistorial). */
+  function verMas() {
+    const ultima = filas[filas.length - 1]
+    if (ultima) void cargar({ fecha: ultima.fecha, id: ultima.id })
+  }
+
   useEffect(() => {
-    void cargar(0)
+    void cargar(null)
   }, [servicio])
 
   return (
@@ -114,7 +124,7 @@ export function PantallaHistorial({ servicio }: PropsPantallaHistorial) {
       </table>
       {cargando && <p>Cargando…</p>}
       {!cargando && hayMas && (
-        <button type="button" onClick={() => void cargar(filas.length)}>
+        <button type="button" onClick={verMas}>
           Ver más
         </button>
       )}

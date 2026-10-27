@@ -1,9 +1,8 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { detectarEscaneo, type Pulsacion } from '../escaner/detector'
+import { detectarEscaneo, enRacha, esTeclaDeRacha, registrarPulsacion, type PulsacionEnCampo } from '../escaner/detector'
 import type { Umbrales } from '../escaner/umbrales'
-import { parsearPesos } from '../lib/plata'
 import type { Producto } from '../tipos'
-import { ErrorProducto, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from './productos'
+import { ErrorProducto, mensajeErrorProducto, validarPrecio, validarProducto, type ServicioProductos } from './productos'
 
 export interface PropsAltaRapidaProducto {
   /** Código escaneado que no está en el catálogo: se guarda tal cual. */
@@ -43,12 +42,16 @@ export function AltaRapidaProducto({
   const [guardando, setGuardando] = useState(false)
   const enCurso = useRef(false)
   // Cada pulsación guarda el campo y su valor previo: una racha del escáner se deshace al detectarla.
-  const pulsaciones = useRef<(Pulsacion & { campo: string; antes: string })[]>([])
+  const pulsaciones = useRef<PulsacionEnCampo[]>([])
 
   function alTecla(e: KeyboardEvent<HTMLFormElement>) {
     if (!escaner) return
     const t = escaner.ahora ? escaner.ahora() : e.timeStamp
     const campo = e.target instanceof HTMLInputElement ? e.target : null
+    // Dentro de una racha, el espacio no activa Guardar y agregar: el clic salta al soltar la tecla.
+    if (e.key === ' ' && e.target instanceof HTMLButtonElement && enRacha(pulsaciones.current, t, escaner.umbrales)) {
+      e.preventDefault()
+    }
     if (e.key === 'Enter') {
       const escaneo = detectarEscaneo(pulsaciones.current, t, escaner.umbrales)
       const primera = escaneo ? pulsaciones.current[escaneo.desde] : undefined
@@ -59,10 +62,9 @@ export function AltaRapidaProducto({
       if (primera?.campo === 'precio') setPrecio(primera.antes)
       // El mismo código es lectura doble o reescaneo: el alta sigue abierta.
       if (escaneo.codigo !== codigo) escaner.alEscanear(escaneo.codigo, t)
-    } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    } else if (esTeclaDeRacha(e)) {
       // Con foco en un botón también: si no, el Enter del escáner lo activa y el código se pierde.
-      const pulsacion = { tecla: e.key, t, campo: campo?.name ?? '', antes: campo?.value ?? '' }
-      pulsaciones.current = [...pulsaciones.current, pulsacion].slice(-64)
+      pulsaciones.current = registrarPulsacion(pulsaciones.current, e.key, t, campo)
     }
   }
 
@@ -89,19 +91,30 @@ export function AltaRapidaProducto({
     }
   }
 
+  /** Nombre y precio tipeados, o null con el aviso puesto. Guardar y reactivar validan igual. */
+  function validar(): { nombre: string; precio: number } | null {
+    const v = validarProducto(nombre, precio)
+    if ('error' in v) {
+      setError(v.error)
+      return null
+    }
+    return v
+  }
+
   function guardar(e: FormEvent) {
     e.preventDefault()
-    const n = nombre.trim()
-    const p = parsearPesos(precio)
-    if (n.length === 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.nombre_invalido)
+    const v = validar()
+    if (v) void correr(() => servicio.alta(codigo, v.nombre, v.precio))
+  }
+
+  /** Sólo precio y activo: el producto conserva su nombre del catálogo (cambiarlo es otra decisión). */
+  function reactivar(productoId: string) {
+    const p = validarPrecio(precio)
+    if ('error' in p) {
+      setError(p.error)
       return
     }
-    if (p === null || p <= 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.precio_invalido)
-      return
-    }
-    void correr(() => servicio.alta(codigo, n, p))
+    void correr(() => servicio.editar(productoId, { precio: p.precio, activo: true }))
   }
 
   return (
@@ -124,11 +137,7 @@ export function AltaRapidaProducto({
       )}
       {/* aria-disabled y no disabled: un botón deshabilitado con foco no recibe el escaneo (decisión 13). enCurso evita el doble envío. */}
       {inactivoId ? (
-        <button
-          type="button"
-          aria-disabled={guardando}
-          onClick={() => void correr(() => servicio.editar(inactivoId, { activo: true }))}
-        >
+        <button type="button" aria-disabled={guardando} onClick={() => reactivar(inactivoId)}>
           Reactivar y agregar
         </button>
       ) : (

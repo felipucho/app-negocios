@@ -12,7 +12,7 @@ export function terminosDeBusqueda(consulta: string): string[] | null {
   return terminos.join('').length >= MIN_LETRAS ? terminos : null
 }
 
-function coincide(palabrasProducto: readonly string[], terminos: readonly string[]): boolean {
+export function coincide(palabrasProducto: readonly string[], terminos: readonly string[]): boolean {
   return terminos.every((t) => palabrasProducto.some((p) => p.startsWith(t)))
 }
 

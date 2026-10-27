@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { compararPorNombre, terminosDeBusqueda } from '../catalogo/buscar'
+import { coincide, compararPorNombre, terminosDeBusqueda } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
-import { formatearPesos, parsearPesos } from '../lib/plata'
+import { formatearPesos } from '../lib/plata'
 import type { Producto } from '../tipos'
-import { ErrorProducto, MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type CambiosProducto, type ServicioProductos } from './productos'
+import { ErrorProducto, mensajeErrorProducto, validarProducto, type CambiosProducto, type ServicioProductos } from './productos'
 
 /** Filas visibles a la vez; el resto se encuentra buscando. */
 export const MAX_FILAS = 50
+
+/** Un producto con las palabras de su nombre: se calculan una vez por lista, no en cada tecla. */
+export interface ProductoIndexado {
+  producto: Producto
+  palabras: string[]
+}
 
 /**
  * Misma búsqueda que la caja (inicio de palabra, sin tildes, desde 2 letras; tarea 6), pero muestra
  * también los desactivados (para reactivarlos) y sin el tope de 8. Con menos de 2 letras, todo.
  */
-export function filtrarProductos(productos: readonly Producto[], consulta: string): Producto[] {
-  const ordenados = [...productos].sort(compararPorNombre)
+export function filtrarProductos(indice: readonly ProductoIndexado[], consulta: string): Producto[] {
   const terminos = terminosDeBusqueda(consulta)
-  if (!terminos) return ordenados
-  return ordenados.filter((p) => {
-    const delProducto = palabras(p.nombre)
-    return terminos.every((t) => delProducto.some((w) => w.startsWith(t)))
-  })
+  return indice.filter((i) => !terminos || coincide(i.palabras, terminos)).map((i) => i.producto)
 }
 
 export interface PropsPantallaProductos {
@@ -44,7 +45,14 @@ export function PantallaProductos({ servicio }: PropsPantallaProductos) {
 
   useEffect(cargar, [servicio])
 
-  const filtrados = useMemo(() => (productos ? filtrarProductos(productos, consulta) : []), [productos, consulta])
+  const indice = useMemo(
+    () =>
+      productos
+        ? [...productos].sort(compararPorNombre).map((p) => ({ producto: p, palabras: palabras(p.nombre) }))
+        : [],
+    [productos],
+  )
+  const filtrados = useMemo(() => filtrarProductos(indice, consulta), [indice, consulta])
 
   function guardado(p: Producto) {
     setProductos((lista) => lista?.map((x) => (x.id === p.id ? p : x)) ?? null)
@@ -64,7 +72,7 @@ export function PantallaProductos({ servicio }: PropsPantallaProductos) {
         <input type="search" value={consulta} onChange={(e) => setConsulta(e.target.value)} />
       </label>
       {agregando ? (
-        <AltaProducto servicio={servicio} alGuardar={agregado} alCancelar={() => setAgregando(false)} />
+        <AltaProducto servicio={servicio} alGuardar={agregado} alCancelar={() => setAgregando(false)} alRecargar={cargar} />
       ) : (
         <button type="button" onClick={() => setAgregando(true)}>
           Agregar producto
@@ -148,19 +156,14 @@ function EditorProducto({ producto, servicio, alGuardar, alCancelar }: PropsEdit
   async function guardar(e: FormEvent) {
     e.preventDefault()
     if (enCurso.current) return
-    const n = nombre.trim()
-    const p = parsearPesos(precio)
-    if (n.length === 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.nombre_invalido)
-      return
-    }
-    if (p === null || p <= 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.precio_invalido)
+    const v = validarProducto(nombre, precio)
+    if ('error' in v) {
+      setError(v.error)
       return
     }
     const cambios: CambiosProducto = {}
-    if (n !== producto.nombre) cambios.nombre = n
-    if (p !== producto.precio) cambios.precio = p
+    if (v.nombre !== producto.nombre) cambios.nombre = v.nombre
+    if (v.precio !== producto.precio) cambios.precio = v.precio
     if (activo !== producto.activo) cambios.activo = activo
     if (Object.keys(cambios).length === 0) {
       alCancelar()
@@ -213,10 +216,12 @@ interface PropsAltaProducto {
   servicio: Pick<ServicioProductos, 'alta'>
   alGuardar(producto: Producto): void
   alCancelar(): void
+  /** El código ya está cargado: esta lista puede no tenerlo (se dio de alta en otra PC), así que se vuelve a leer. */
+  alRecargar(): void
 }
 
 /** Alta desde la pantalla de productos. Código vacío = producto sin código: va a la grilla F2 con 0 ventas. */
-function AltaProducto({ servicio, alGuardar, alCancelar }: PropsAltaProducto) {
+function AltaProducto({ servicio, alGuardar, alCancelar, alRecargar }: PropsAltaProducto) {
   const [nombre, setNombre] = useState('')
   const [precio, setPrecio] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -227,22 +232,20 @@ function AltaProducto({ servicio, alGuardar, alCancelar }: PropsAltaProducto) {
   async function guardar(e: FormEvent) {
     e.preventDefault()
     if (enCurso.current) return
-    const n = nombre.trim()
-    const p = parsearPesos(precio)
-    if (n.length === 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.nombre_invalido)
-      return
-    }
-    if (p === null || p <= 0) {
-      setError(MENSAJES_ERROR_PRODUCTO.precio_invalido)
+    const v = validarProducto(nombre, precio)
+    if ('error' in v) {
+      setError(v.error)
       return
     }
     enCurso.current = true
     setGuardando(true)
     setError(null)
     try {
-      alGuardar(await servicio.alta(codigo.trim() || null, n, p))
+      alGuardar(await servicio.alta(codigo.trim() || null, v.nombre, v.precio))
     } catch (err) {
+      if (err instanceof ErrorProducto && (err.codigo === 'codigo_existente' || err.codigo === 'codigo_existente_inactivo')) {
+        alRecargar()
+      }
       // codigo_existente_inactivo: el producto está en la lista como "Desactivado" y se reactiva desde ahí.
       // El mensaje de codigo_existente es para la caja ("volvé a escanearlo"); acá no se escanea.
       setError(

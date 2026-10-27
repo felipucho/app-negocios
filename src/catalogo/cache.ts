@@ -24,43 +24,47 @@ export class CacheCatalogo extends Dexie {
   }
 }
 
-let cacheApp: CacheCatalogo | null = null
+export const aCache = (p: Producto): ProductoCache => ({ ...p, palabras: palabras(p.nombre) })
 
-/** Instancia de la app (perezosa: no abre IndexedDB hasta usarla). */
-export function cacheDeLaApp(): CacheCatalogo {
-  cacheApp ??= new CacheCatalogo()
-  return cacheApp
+/** Meta entero en una lectura. La marca de borrado va aparte: sólo la cambia un cierre de sesión. */
+const estadoMeta = async (db: CacheCatalogo) => {
+  const meta = await db.meta.toArray()
+  return { todo: JSON.stringify(meta), borrado: meta.find((m) => m.clave === 'borrado')?.valor }
 }
-
-const aCache = (p: Producto): ProductoCache => ({ ...p, palabras: palabras(p.nombre) })
-const estadoMeta = async (db: CacheCatalogo) => JSON.stringify(await db.meta.toArray())
 
 export async function sincronizarCatalogo(
   db: CacheCatalogo,
   fuente: FuenteCatalogo,
 ): Promise<{ actualizado: boolean; version: number }> {
-  // La versión se lee antes que los productos: si cambia en el medio, la revisión siguiente recarga.
-  const { negocioId, version } = await fuente.leerVersion()
-  const [negocio, guardada] = await Promise.all([db.meta.get('negocio_id'), db.meta.get('catalogo_version')])
-  if (negocio?.valor === negocioId && guardada?.valor === version) return { actualizado: false, version }
-  // Otro negocio: se vacía antes de bajar, para que una descarga fallida no deje su catálogo buscable.
-  if (negocio && negocio.valor !== negocioId) await vaciar(db)
-  const antes = await estadoMeta(db)
+  // Dos intentos como máximo: si otra sincronización escribió en el medio, el segundo lee lo que quedó.
+  for (let intento = 1; ; intento++) {
+    // Antes de la versión: un cierre de sesión durante la descarga cambia esta marca y la transacción aborta.
+    const borradoAntes = (await db.meta.get('borrado'))?.valor
+    // La versión se lee antes que los productos: si cambia en el medio, la revisión siguiente recarga.
+    const { negocioId, version } = await fuente.leerVersion()
+    const [negocio, guardada] = await Promise.all([db.meta.get('negocio_id'), db.meta.get('catalogo_version')])
+    if (negocio?.valor === negocioId && guardada?.valor === version) return { actualizado: false, version }
+    // Otro negocio: se vacía antes de bajar, para que una descarga fallida no deje su catálogo buscable.
+    if (negocio && negocio.valor !== negocioId) await vaciar(db)
+    const antes = await estadoMeta(db)
 
-  const productos = await fuente.leerProductos()
-  const escrito = await db.transaction('rw', db.productos, db.meta, async () => {
-    // Optimista: si mientras bajaba otra sincronización o un borrarCache (de cualquier pestaña) tocó meta, no se pisa.
-    // No compara versiones: un restore puede bajar catalogo_version y la caché tiene que seguirlo.
-    if ((await estadoMeta(db)) !== antes) return false
-    await db.productos.clear()
-    await db.productos.bulkPut(productos.map(aCache))
-    await db.meta.bulkPut([
-      { clave: 'negocio_id', valor: negocioId },
-      { clave: 'catalogo_version', valor: version },
-    ])
-    return true
-  })
-  return { actualizado: escrito, version }
+    const productos = await fuente.leerProductos()
+    const resultado = await db.transaction('rw', db.productos, db.meta, async () => {
+      // Optimista: otra sincronización que escribió → se reintenta una vez; un borrarCache (marca de borrado) aborta.
+      // No compara versiones: un restore puede bajar catalogo_version y la caché tiene que seguirlo.
+      const ahora = await estadoMeta(db)
+      if (ahora.borrado !== borradoAntes) return 'borrada'
+      if (ahora.todo !== antes.todo) return 'pisada'
+      await db.productos.clear()
+      await db.productos.bulkPut(productos.map(aCache))
+      await db.meta.bulkPut([
+        { clave: 'negocio_id', valor: negocioId },
+        { clave: 'catalogo_version', valor: version },
+      ])
+      return 'escrita'
+    })
+    if (resultado !== 'pisada' || intento === 2) return { actualizado: resultado === 'escrita', version }
+  }
 }
 
 export async function buscarEnCache(db: CacheCatalogo, consulta: string): Promise<ProductoCache[]> {
@@ -78,7 +82,8 @@ export async function buscarPorCodigoEnCache(db: CacheCatalogo, codigo: string):
 async function vaciar(db: CacheCatalogo): Promise<void> {
   await db.transaction('rw', db.productos, db.meta, async () => {
     await db.productos.clear()
-    await db.meta.clear()
+    // La marca de borrado se conserva: sólo la cambia un cierre de sesión (ver estadoMeta).
+    await db.meta.where('clave').notEqual('borrado').delete()
   })
 }
 
@@ -92,7 +97,7 @@ export async function vaciarCacheAjena(db: CacheCatalogo, negocioId: string): Pr
 }
 
 /** Al cerrar sesión (la PC puede ser compartida, spec sección 10). La usa la tarea 17. */
-export async function borrarCache(db: CacheCatalogo = cacheDeLaApp()): Promise<void> {
+export async function borrarCache(db: CacheCatalogo): Promise<void> {
   // La marca cambia meta: una sincronización en curso en otra pestaña la ve y no reescribe.
   await db.transaction('rw', db.productos, db.meta, async () => {
     await vaciar(db)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { iniciarSentry, limpiarMiga, redactar, type EventoLimpiable } from './sentry'
+import { iniciarSentry, limpiarEvento, limpiarMiga, redactar, type EventoLimpiable } from './sentry'
 
 const DSN = 'https://clave123@o111.ingest.us.sentry.io/222'
 
@@ -37,6 +37,7 @@ function eventoConDatosPersonales(): EventoLimpiable {
 interface OpcionesCapturadas {
   dsn: string
   sendDefaultPii: boolean
+  integrations: { name: string }[]
   beforeSend(evento: EventoLimpiable, hint: unknown): EventoLimpiable | null
   beforeBreadcrumb(miga: object): object | null
 }
@@ -60,6 +61,12 @@ describe('Sentry sin datos personales', () => {
     expect(opcionesDe(iniciar)).toEqual(expect.objectContaining({ dsn: DSN, sendDefaultPii: false }))
   })
 
+  it('captura los console.error, que es donde la app deja sus fallos atrapados', () => {
+    const iniciar = vi.fn()
+    iniciarSentry(DSN, iniciar)
+    expect(opcionesDe(iniciar).integrations.map((i) => i.name)).toContain('CaptureConsole')
+  })
+
   it('un evento con email, nombre y teléfono sale sin esos campos', () => {
     const iniciar = vi.fn()
     iniciarSentry(DSN, iniciar)
@@ -75,6 +82,17 @@ describe('Sentry sin datos personales', () => {
         data: { method: 'POST', status_code: 400, url: 'https://abcd.supabase.co/rest/v1/rpc/alta_cliente' },
       },
     ])
+  })
+
+  it('un error de consola sale sin sus argumentos y con el email tapado', () => {
+    const evento: EventoLimpiable = {
+      message: 'alta de cliente falló para ana.gomez@kiosco.com',
+      extra: { arguments: ['alta de cliente falló', { nombre: 'Ana Gómez', telefono: '11 5555-1234' }] },
+    }
+    limpiarEvento(evento)
+    expect(evento.extra).toBeUndefined()
+    expect(evento.message).toBe('alta de cliente falló para [email]')
+    expect(JSON.stringify(evento)).not.toMatch(/Ana Gómez|5555/)
   })
 
   it('beforeBreadcrumb descarta la consola antes de guardarla', () => {

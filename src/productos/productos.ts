@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearFuenteSupabase } from '../catalogo/fuente'
-import { palabras } from '../catalogo/normalizar'
-import type { Producto, ProductoCache } from '../tipos'
+import { parsearPesos } from '../lib/plata'
+import type { Producto } from '../tipos'
 
 /** Errores de alta_producto_caja y editar_producto (tarea 15). 'desconocido' = red u otro. */
 export type CodigoErrorProducto =
@@ -46,6 +46,20 @@ export function mensajeErrorProducto(e: unknown): string {
   return MENSAJES_ERROR_PRODUCTO[e instanceof ErrorProducto ? e.codigo : 'desconocido']
 }
 
+/** Precio tipeado: pesos enteros, mayor que cero. La misma regla en toda la app. */
+export function validarPrecio(precio: string): { precio: number } | { error: string } {
+  const p = parsearPesos(precio)
+  return p === null || p <= 0 ? { error: MENSAJES_ERROR_PRODUCTO.precio_invalido } : { precio: p }
+}
+
+/** Nombre y precio tipeados en cualquier alta o edición: la misma regla en todas las pantallas. */
+export function validarProducto(nombre: string, precio: string): { nombre: string; precio: number } | { error: string } {
+  const n = nombre.trim()
+  if (n.length === 0) return { error: MENSAJES_ERROR_PRODUCTO.nombre_invalido }
+  const p = validarPrecio(precio)
+  return 'error' in p ? p : { nombre: n, precio: p.precio }
+}
+
 /** Sólo lo que cambia; lo que falta no se toca. El código de barras no se edita desde la app. */
 export interface CambiosProducto {
   nombre?: string
@@ -61,8 +75,6 @@ export interface ServicioProductos {
   /** Reactivar = editar(id, { activo: true }). */
   editar(productoId: string, cambios: CambiosProducto): Promise<Producto>
 }
-
-export const aProductoCache = (p: Producto): ProductoCache => ({ ...p, palabras: palabras(p.nombre) })
 
 function aProducto(dato: unknown): Producto {
   const r = dato as Producto

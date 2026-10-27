@@ -92,8 +92,24 @@ describe('sincronizarCatalogo', () => {
     const vieja = sincronizarCatalogo(db, lenta.fuente)
     await vi.waitFor(() => expect(lenta.fuente.leerProductos).toHaveBeenCalled())
     await sincronizarCatalogo(db, fuenteFalsa('n1', 6, [{ ...coca, precio: 1700 }]).fuente)
+    // El servidor ya está en la 6: al reintentar, la vieja lo ve y no vuelve a escribir.
+    lenta.estado.version = 6
+    lenta.estado.productos = [{ ...coca, precio: 1700 }]
     soltar([coca])
-    expect(await vieja).toEqual({ actualizado: false, version: 5 })
+    expect(await vieja).toEqual({ actualizado: false, version: 6 })
+    expect((await buscarEnCache(db, 'coca'))[0].precio).toBe(1700)
+  })
+
+  it('si la sincronización nueva termina después de una vieja, la nueva gana', async () => {
+    const db = nuevaCache()
+    const nueva = fuenteFalsa('n1', 6, [{ ...coca, precio: 1700 }])
+    let soltar!: (p: Producto[]) => void
+    vi.mocked(nueva.fuente.leerProductos).mockReturnValueOnce(new Promise((r) => (soltar = r)))
+    const enCurso = sincronizarCatalogo(db, nueva.fuente)
+    await vi.waitFor(() => expect(nueva.fuente.leerProductos).toHaveBeenCalled())
+    await sincronizarCatalogo(db, fuenteFalsa('n1', 5, [coca]).fuente)
+    soltar([{ ...coca, precio: 1700 }])
+    expect(await enCurso).toEqual({ actualizado: true, version: 6 })
     expect((await buscarEnCache(db, 'coca'))[0].precio).toBe(1700)
   })
 
@@ -119,6 +135,27 @@ describe('sincronizarCatalogo', () => {
     soltar([coca])
     expect(await enCurso).toEqual({ actualizado: false, version: 1 })
     expect(await buscarEnCache(pestana1, 'coca')).toEqual([])
+  })
+
+  it('un cierre de sesión mientras se pide la versión tampoco deja la caché llena', async () => {
+    const db = nuevaCache()
+    const { fuente } = fuenteFalsa('n1', 1, [coca])
+    let soltar!: (v: { negocioId: string; version: number }) => void
+    vi.mocked(fuente.leerVersion).mockReturnValueOnce(new Promise((r) => (soltar = r)))
+    const enCurso = sincronizarCatalogo(db, fuente)
+    await vi.waitFor(() => expect(fuente.leerVersion).toHaveBeenCalled())
+    await borrarCache(db)
+    soltar({ negocioId: 'n1', version: 1 })
+    expect(await enCurso).toEqual({ actualizado: false, version: 1 })
+    expect(await buscarEnCache(db, 'coca')).toEqual([])
+  })
+
+  it('vaciar la caché de otro negocio no borra la marca de cierre: la sincronización siguiente escribe', async () => {
+    const db = nuevaCache()
+    await borrarCache(db)
+    await sincronizarCatalogo(db, fuenteFalsa('n1', 4, [coca]).fuente)
+    expect(await sincronizarCatalogo(db, fuenteFalsa('n2', 4, [pan]).fuente)).toEqual({ actualizado: true, version: 4 })
+    expect((await buscarEnCache(db, 'pan')).map((p) => p.id)).toEqual(['p2'])
   })
 })
 

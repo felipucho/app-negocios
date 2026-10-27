@@ -1,10 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { compararPorNombre } from '../catalogo/buscar'
 import { palabras } from '../catalogo/normalizar'
-import type { ItemRanking, ProductoCache } from '../tipos'
+import type { ProductoCache } from '../tipos'
 
 /** Fila de ranking_sin_codigo() (tarea 11). Sin precio: el panel usa el de la caché, que es el vigente. */
-export type FilaRanking = Omit<ItemRanking, 'precio'>
+export interface FilaRanking {
+  producto_id: string
+  nombre: string
+  cantidad_ventas: number
+}
 
 /** Grilla de 4 × 5 (spec sección 6). */
 export const LUGARES_PANEL = 20
