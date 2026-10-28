@@ -318,6 +318,7 @@ Expected: `Initialized empty Git repository in C:/Users/felipe/Desktop/app negoc
 # Dependencias y builds
 node_modules/
 dist/
+dist-dev/
 
 # Sesiones de brainstorming
 .superpowers/
@@ -571,7 +572,7 @@ npx tsc --noEmit
 npm test
 npm run build
 ```
-Expected: `tsc` sin salida; `npm test` con `Tests  1 passed (1)`; el build termina con `✓ built in` y crea `dist/index.html`.
+Expected: `tsc` sin salida; `npm test` con `Tests  1 passed (1)`; el build termina con `✓ built in` y crea `dist-dev/index.html`.
 
 - [ ] **Step 10: Commit (sólo con OK de Felipe)**
 
@@ -13840,7 +13841,7 @@ npx vitest run src/app src/negocio src/Kiosco.test.tsx
 npx tsc --noEmit
 npm test
 npm run build
-grep -c "__APP_VERSION__" dist/assets/*.js
+grep -c "__APP_VERSION__" dist-dev/assets/*.js
 ```
 Expected: `Test Files  4 passed (4)` y `Tests  29 passed (29)` (11 de `version`, 6 de `config`, 3 de `AvisoAbono` y 9 de `Kiosco`); `tsc` sin salida; `npm test` sin fallas; el build termina con `✓ built in`; el `grep` imprime `0` para cada archivo (Vite reemplazó la constante). Si `config.test.ts` falla porque `getPropertyValue('--color-primario')` devuelve `''` después de `setProperty`, jsdom no soporta variables CSS en esa versión (V41): cambiar esas dos comprobaciones por `expect(document.documentElement.style.cssText).toContain('--color-primario: #aa3300')`.
 
@@ -14380,7 +14381,7 @@ npx vitest run src/lib/sentry.test.ts config/headers.test.ts
 npx tsc --noEmit
 npm test
 npm run build
-cat dist/_headers
+cat dist-dev/_headers
 ```
 Expected: `Test Files  2 passed (2)` y `Tests  12 passed (12)` (6 de `sentry` y 6 de `headers`); `tsc` sin salida; `npm test` sin fallas; el build termina con `✓ built in`; `cat` muestra `/*` y las cuatro líneas de headers, con `connect-src 'self' http://127.0.0.1:54321` (el build local usa `.env.local`). Si `tsc` marca `beforeSend` o `beforeBreadcrumb` como incompatibles con `EventoLimpiable` o `MigaLimpiable`, los tipos de `@sentry/browser` cambiaron (V42): ajustar las dos interfaces de `src/lib/sentry.ts` a los tipos `ErrorEvent` y `Breadcrumb` que exporte el paquete, sin cambiar la lógica.
 
@@ -14390,9 +14391,14 @@ Run:
 ```bash
 VITE_SUPABASE_URL= npx vite build --mode sin-supabase; echo "salida: $?"
 ```
-Expected: el build corta con `Falta VITE_SUPABASE_URL: sin ella no se puede armar la CSP de _headers.` y `salida: 1`. (Las variables del proceso le ganan a los archivos `.env` en `loadEnv`; la vacía cuenta como ausente.) Después, `npm run build` para dejar `dist` bien.
+Expected: el build corta con `Falta VITE_SUPABASE_URL: sin ella no se puede armar la CSP de _headers.` y `salida: 1`. (Las variables del proceso le ganan a los archivos `.env` en `loadEnv`; la vacía cuenta como ausente.) Después, `npx vite build --mode development` para dejar `dist` bien (lo que sirve `wrangler dev`).
 
 - [ ] **Step 10: Probar `_headers` y la CSP en local con wrangler (V1, V47, V48)**
+
+Antes, el build local en `dist/` (`npm run build` escribe en `dist-dev/` desde el merge de `propuesta/dist-dev`, y `wrangler dev` sirve `dist/`):
+```bash
+npx vite build --mode development
+```
 
 Run, en una terminal de Git Bash (queda corriendo):
 ```bash
@@ -14958,7 +14964,7 @@ npm run test:integracion
 npm run test:e2e
 npm run build
 ```
-Expected: `tsc` sin salida; Vitest, pgTAP, integración y E2E sin fallas (`All tests successful.` y `Result: PASS` en pgTAP, `9 passed` en E2E); el build termina con `✓ built in` y deja `dist/_headers`.
+Expected: `tsc` sin salida; Vitest, pgTAP, integración y E2E sin fallas (`All tests successful.` y `Result: PASS` en pgTAP, `9 passed` en E2E); el build termina con `✓ built in` y deja `dist-dev/_headers`.
 
 - [ ] **Step 17: Checklist de despliegue (lo hace Felipe; cada paso con su verificación)**
 
@@ -15048,7 +15054,7 @@ read -r -p "dominio, o <nombre>.<subdominio>.workers.dev, sin https:// : " DOMIN
   npx wrangler login
   npm run deploy
   ```
-  Esperado: `git status` no imprime nada; el build termina con `✓ built in` (si corta con `VITE_SUPABASE_URL de producción tiene que ser https y no local`, falta `.env.production.local`); el `grep` muestra `connect-src 'self' https://<ref>.supabase.co`; el deploy termina con `Uploaded venta-y-cobro` y la URL `https://venta-y-cobro.<subdominio>.workers.dev`. Desplegar siempre con `npm run deploy`: `npm run build` arma la versión local (modo development, Supabase local) y un `npx wrangler deploy` a mano después de él sube esa.
+  Esperado: `git status` no imprime nada; el build termina con `✓ built in` (si corta con `VITE_SUPABASE_URL de producción tiene que ser https y no local`, falta `.env.production.local`); el `grep` muestra `connect-src 'self' https://<ref>.supabase.co`; el deploy termina con `Uploaded venta-y-cobro` y la URL `https://venta-y-cobro.<subdominio>.workers.dev`. Desplegar siempre con `npm run deploy`. `npm run build` escribe en `dist-dev/` (la versión local: modo development, Supabase local), que `wrangler deploy` no sube. Subir esa versión a mano exige `npx vite build --mode development` (escribe `dist/`) antes del `wrangler deploy`.
 
 - [ ] **D9. Dominio .com.ar, cuando esté decidido (costo no verificado).** Registrarlo en NIC Argentina, pasar su DNS a Cloudflare y sumar a `wrangler.jsonc`, después de `"compatibility_date"`:
   ```jsonc
