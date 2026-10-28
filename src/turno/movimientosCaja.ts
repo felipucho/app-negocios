@@ -16,11 +16,16 @@ export interface MovimientoCaja {
   ya_existia: boolean
 }
 
+/** Lo que devuelve listarDelTurno: la fila sin ya_existia (sólo lo trae registrar). */
+export type MovimientoDelTurno = Omit<MovimientoCaja, 'ya_existia'>
+
 export interface ServicioMovimientosCaja {
   /** Una vez por turno. */
   fijarMontoInicial(monto: number): Promise<void>
   /** movimientoId lo genera quien llama y se repite en cada reintento: no registra dos veces. */
   registrar(movimientoId: string, tipo: TipoMovimientoCaja, importe: number, detalle?: string): Promise<MovimientoCaja>
+  /** Movimientos del turno abierto, en orden de carga. RLS: la caja ve los de hoy. */
+  listarDelTurno(turnoId: string): Promise<MovimientoDelTurno[]>
 }
 
 export const MENSAJES_MOVIMIENTOS_CAJA: Record<string, string> = {
@@ -54,6 +59,15 @@ export function crearServicioMovimientosCaja(supabase: SupabaseClient, dispositi
       })
       if (error) throw error
       return data as MovimientoCaja
+    },
+    async listarDelTurno(turnoId) {
+      const { data, error } = await supabase
+        .from('movimientos_caja')
+        .select('id, turno_id, dispositivo_id, cuenta_id, fecha, tipo, importe, detalle')
+        .eq('turno_id', turnoId)
+        .order('fecha')
+      if (error) throw error
+      return (data ?? []) as MovimientoDelTurno[]
     },
   }
 }

@@ -13,13 +13,6 @@ export interface ServicioClientes {
   alta(nombre: string, telefono: string | null): Promise<Cliente>
 }
 
-/** El módulo lo decide la base (modulo_activo, tarea 9). La pantalla sólo lo usa para mostrar u ocultar. */
-export async function fiadoActivo(supabase: SupabaseClient): Promise<boolean> {
-  const { data, error } = await supabase.rpc('modulo_activo', { p_clave: 'fiado' })
-  if (error) throw error
-  return data === true
-}
-
 export function crearServicioClientes(supabase: SupabaseClient): ServicioClientes {
   return {
     async listar() {

@@ -5,13 +5,14 @@ import { UMBRALES, type Umbrales } from '../escaner/umbrales'
 import { formatearPesos } from '../lib/plata'
 import { AltaRapidaProducto } from '../productos/AltaRapidaProducto'
 import { MENSAJES_ERROR_PRODUCTO, mensajeErrorProducto, type ServicioProductos } from '../productos/productos'
-import type { LineaCarrito, Producto, ProductoCache } from '../tipos'
+import type { LineaCarrito, LineaVarios, Producto, ProductoCache } from '../tipos'
 import { AvisoTurnoCerradoSolo, PedirApertura } from '../turno/PantallaTurno'
 import type { AperturaTurno, CierreTurno, TurnoAbierto } from '../turno/turno'
 import { pitido } from '../ui/pitido'
 import { carritoReducer, carritoVacio, totalCarrito, type AccionCarrito } from '../venta/carrito'
 import { crearIdVenta, type GeneradorIdVenta } from '../venta/idVenta'
 import { CampoEscaneo } from './CampoEscaneo'
+import { FormVarios, type DatosVarios } from './FormVarios'
 import type { CatalogoCaja } from './catalogoCaja'
 import { LineasVenta } from './LineasVenta'
 import { idSugerencia, ListaSugerencias } from './ListaSugerencias'
@@ -63,6 +64,8 @@ export interface PropsPantallaCaja {
   productos?: ServicioProductos
   /** false mientras el kiosco muestra otra cosa encima o en lugar de la caja (la caja sigue montada). */
   activa?: boolean
+  /** Módulo varios: muestra el botón Varios para vender un importe libre. */
+  varios?: boolean
 }
 
 type EstadoTurno =
@@ -81,6 +84,7 @@ export function PantallaCaja({
   pitar = pitido,
   productos,
   activa = true,
+  varios = false,
 }: PropsPantallaCaja) {
   const campo = useRef<HTMLInputElement>(null)
   const [estadoTurno, setEstadoTurno] = useState<EstadoTurno>({ tipo: 'cargando' })
@@ -101,6 +105,7 @@ export function PantallaCaja({
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null)
   const [inactivo, setInactivo] = useState<ProductoCache | null>(null)
   const [reactivando, setReactivando] = useState(false)
+  const [variosAbierto, setVariosAbierto] = useState(false)
   const cobroAbiertoRef = useRef(false)
   // Lo que está abierto ahora, para las respuestas que llegan tarde con clausuras viejas.
   const altaRef = useRef<string | null>(null)
@@ -350,6 +355,29 @@ export function PantallaCaja({
     enfocar()
   }
 
+  function abrirVarios() {
+    if (cobroAbiertoRef.current) return
+    limpiarBusqueda()
+    setPanelAbierto(false)
+    setVariosAbierto(true)
+  }
+
+  function cerrarVarios() {
+    setVariosAbierto(false)
+    enfocar()
+  }
+
+  /** Venta libre: entra a la venta como una línea propia, sin producto. */
+  function agregarVarios(datos: DatosVarios) {
+    const linea: LineaVarios = { varios: true, lineaId: crypto.randomUUID(), ...datos }
+    despachar({ tipo: 'agregarVarios', linea })
+    setResaltado(linea.lineaId)
+    setAviso(null)
+    setVariosAbierto(false)
+    enfocar()
+    pitar()
+  }
+
   /** Enter nunca agrega una sugerencia sola: sólo la elegida con flechas. */
   function enter() {
     if (panelAbierto || seleccion === null) return
@@ -364,9 +392,9 @@ export function PantallaCaja({
     )
   }
 
-  function cambiarCantidad(productoId: string, delta: 1 | -1) {
+  function cambiarCantidad(lineaId: string, delta: 1 | -1) {
     if (cobroAbiertoRef.current) return
-    despachar({ tipo: 'cambiarCantidad', productoId, delta })
+    despachar({ tipo: 'cambiarCantidad', lineaId, delta })
     enfocar()
   }
 
@@ -374,6 +402,7 @@ export function PantallaCaja({
     if (carrito.lineas.length === 0) return
     limpiarBusqueda()
     setPanelAbierto(false)
+    setVariosAbierto(false)
     ponerAlta(null)
     ponerInactivo(null)
     ponerCobro(true)
@@ -499,7 +528,19 @@ export function PantallaCaja({
         Si recargás la página (F5), la venta sin confirmar se pierde: antes de volver a cargarla, revisá las ventas de
         hoy, porque pudo haberse grabado.
       </p>
+      {variosAbierto && <FormVarios alAgregar={agregarVarios} alCancelar={cerrarVarios} />}
       <LineasVenta lineas={carrito.lineas} resaltado={resaltado} bloqueada={cobroAbierto} alCambiar={cambiarCantidad} />
+      {varios && !cobroAbierto && !variosAbierto && (
+        <button
+          type="button"
+          className="boton-varios"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={abrirVarios}
+        >
+          Varios
+        </button>
+      )}
       {!cobroAbierto && (
         <button
           type="button"

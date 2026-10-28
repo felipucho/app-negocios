@@ -4,7 +4,12 @@ import type { ResultadoLogin, SesionAuth } from '../auth/useSesion'
 import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/servicioCajaDelDia'
 import type { FilaRanking } from '../caja/ranking'
 import type { CursorHistorial, FilaHistorial } from '../jefe/jefe'
+import type { ClaveModulo, Modulo } from '../modulos/modulos'
 import type { ConfigNegocio, EstadoAbono } from '../negocio/config'
+import type { MedioCobroFiado, SaldoFiado, ServicioFiado } from '../fiado/fiado'
+import type { GestionProducto, ServicioPrecios } from '../precios/precios'
+import type { Faltante, ServicioStock, StockProducto } from '../stock/stock'
+import type { MovimientoCaja, MovimientoDelTurno, ServicioMovimientosCaja } from '../turno/movimientosCaja'
 import type { ClienteCaja } from '../pagos/clientes'
 import type { Servicios } from '../servicios'
 import type { Cliente } from '../tipos'
@@ -65,6 +70,13 @@ function turnoFalso() {
   }
 }
 
+const TODOS_LOS_MODULOS: ClaveModulo[] = ['fiado', 'precios', 'movimientos_caja', 'stock', 'varios']
+
+/** Catálogo de módulos con los activos que pasa el test. */
+export function modulosDePrueba(activos: readonly ClaveModulo[]): Modulo[] {
+  return TODOS_LOS_MODULOS.map((clave) => ({ clave, descripcion: clave, activo: activos.includes(clave) }))
+}
+
 /** Servicios de la app en memoria. Sin opciones: hay una cuenta caja y no hay sesión abierta. */
 export function serviciosFalsos(
   opciones: {
@@ -72,6 +84,8 @@ export function serviciosFalsos(
     cuenta?: Cuenta | null
     config?: ConfigNegocio | null
     estadoAbono?: EstadoAbono | null
+    /** Módulos activos del negocio. Por defecto, sólo el fiado. */
+    modulos?: ClaveModulo[]
   } = {},
 ) {
   const productos = servicioProductosFalso()
@@ -86,7 +100,7 @@ export function serviciosFalsos(
     sincronizarCatalogo: vi.fn(async () => undefined),
     catalogo: catalogoDePrueba(),
     leerRanking: vi.fn(async (): Promise<FilaRanking[]> => []),
-    fiadoActivo: vi.fn(async () => true),
+    leerModulos: vi.fn(async (): Promise<Modulo[]> => modulosDePrueba(opciones.modulos ?? ['fiado'])),
     clientes: {
       listar: vi.fn(async (): Promise<ClienteCaja[]> => []),
       listarConTelefono: vi.fn(async (): Promise<Cliente[]> => []),
@@ -112,6 +126,57 @@ export function serviciosFalsos(
       anonimizarCliente: vi.fn(async (id: string): Promise<Cliente> => ({ id, nombre: 'Cliente suprimido', telefono: null })),
       leerHistorial: vi.fn(async (_despuesDe: CursorHistorial | null): Promise<FilaHistorial[]> => []),
     },
+    precios: vi.fn(
+      (_dispositivoId: string): ServicioPrecios => ({
+        leerGestion: vi.fn(async (): Promise<GestionProducto[]> => []),
+        editarGestion: vi.fn(
+          async (productoId: string, datos: Omit<GestionProducto, 'producto_id'>): Promise<GestionProducto> => ({
+            producto_id: productoId,
+            ...datos,
+          }),
+        ),
+        aumentarPrecios: vi.fn(async () => ({ cantidad: 0, ya_existia: false })),
+      }),
+    ),
+    fiado: vi.fn(
+      (_dispositivoId: string): ServicioFiado => ({
+        leerSaldos: vi.fn(async (): Promise<SaldoFiado[]> => []),
+        cobrar: vi.fn(async (pagoId: string, _clienteId: string, _medio: MedioCobroFiado, importe: number) => ({
+          pago_id: pagoId,
+          fecha: '2026-10-19T16:00:00Z',
+          saldo: importe,
+          ya_existia: false,
+        })),
+        fijarLimite: vi.fn(async (_clienteId: string, limite: number | null) => limite),
+      }),
+    ),
+    stock: vi.fn(
+      (_dispositivoId: string): ServicioStock => ({
+        leerStock: vi.fn(async (): Promise<StockProducto[]> => []),
+        leerFaltantes: vi.fn(async (): Promise<Faltante[]> => []),
+        ingresar: vi.fn(async () => ({ ya_existia: false })),
+        ajustar: vi.fn(async (productoId: string): Promise<StockProducto> => ({ producto_id: productoId, cantidad: 0, minimo: 0 })),
+      }),
+    ),
+    movimientos: vi.fn(
+      (_dispositivoId: string): ServicioMovimientosCaja => ({
+        fijarMontoInicial: vi.fn(async () => undefined),
+        registrar: vi.fn(
+          async (): Promise<MovimientoCaja> => ({
+            id: 'm1',
+            turno_id: 't1',
+            dispositivo_id: 'pc-1',
+            cuenta_id: 'u-caja',
+            fecha: '2026-10-19T16:00:00Z',
+            tipo: 'ingreso',
+            importe: 1,
+            detalle: null,
+            ya_existia: false,
+          }),
+        ),
+        listarDelTurno: vi.fn(async (): Promise<MovimientoDelTurno[]> => []),
+      }),
+    ),
     leerConfig: vi.fn(async (): Promise<ConfigNegocio | null> => opciones.config ?? null),
     leerEstadoAbono: vi.fn(async (): Promise<EstadoAbono | null> =>
       opciones.estadoAbono !== undefined ? opciones.estadoAbono : 'activo',

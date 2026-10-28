@@ -1,6 +1,6 @@
 import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
-import { NOMBRE_MEDIO, type LineaCarrito } from '../tipos'
+import { idLinea, NOMBRE_MEDIO, type LineaCarrito } from '../tipos'
 import type { PagoAEnviar } from '../venta/cobro'
 import { formatearNumeroVenta, type VentaConfirmada } from '../venta/confirmar'
 
@@ -29,7 +29,7 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuev
       <table aria-label="Productos">
         <tbody>
           {lineas.map((l) => (
-            <tr key={l.productoId}>
+            <tr key={idLinea(l)}>
               <td>
                 {l.cantidad} × {l.nombre}
               </td>
@@ -53,6 +53,18 @@ export function Comprobante({ venta, lineas, pagos, alNuevaVenta, alCobrarDeNuev
         <p className="vuelto">
           Vuelto <strong>{formatearPesos(venta.vuelto)}</strong>
         </p>
+      )}
+      {venta.stockBajo && venta.stockBajo.length > 0 && (
+        <section className="aviso" aria-label="Stock">
+          <p>Quedaron en o bajo el mínimo:</p>
+          <ul>
+            {venta.stockBajo.map((s) => (
+              <li key={s.productoId}>
+                {s.nombre}: quedan {s.cantidad} (mínimo {s.minimo})
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       <button type="button" autoFocus onClick={alNuevaVenta}>
         Nueva venta

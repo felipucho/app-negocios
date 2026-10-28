@@ -62,7 +62,7 @@ select is(public.cerrar_turno('a1000000-0000-0000-0000-000000000001', 1300) -> '
   'el arqueo compara lo esperado con lo contado');
 
 reset role;
-select is((select valor_nuevo from public.historial where tipo = 'cierre_turno'),
+select is((select valor_nuevo from public.historial where tipo = 'cierre_turno' and negocio_id = 'a0000000-0000-0000-0000-000000000000'),
   '{"automatico": false, "efectivo_contado": 1300, "diferencia": -50}'::jsonb, 'el historial guarda el arqueo');
 set local role authenticated;
 

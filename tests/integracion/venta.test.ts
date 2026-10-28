@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
-import { crearServicioClientes, fiadoActivo } from '../../src/pagos/clientes'
+import { leerModulos } from '../../src/modulos/modulos'
+import { crearServicioClientes } from '../../src/pagos/clientes'
 import { abrirTurno, cerrarTurno, leerUltimoTurnoCerrado } from '../../src/turno/turno'
 import { pagosAEnviar, type ImportesPorMedio } from '../../src/venta/cobro'
 import {
@@ -135,7 +136,7 @@ describe('venta completa contra Supabase local', () => {
 
   it('fiado parcial con un cliente dado de alta desde la caja', async () => {
     const { kiosco, dispositivoId, alfajor, rpc } = await prepararKiosco('Kiosco fiado')
-    expect(await fiadoActivo(kiosco.caja.cliente)).toBe(true)
+    expect((await leerModulos(kiosco.caja.cliente)).find((m) => m.clave === 'fiado')?.activo).toBe(true)
     const servicio = crearServicioClientes(kiosco.caja.cliente)
     const cliente = await servicio.alta('Juan del 5to', '11 5555-1234')
     const pedido = pedidoDe(dispositivoId, alfajor, 1, { ...SIN_PAGOS, efectivo: 400, fiado: 500 }, cliente.id)

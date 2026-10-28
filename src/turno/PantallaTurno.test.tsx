@@ -109,4 +109,45 @@ describe('ResumenCierre', () => {
     render(<ResumenCierre cierre={CIERRE} alSeguir={vi.fn()} />)
     totalesALaVista()
   })
+
+  it('con el arqueo, muestra el efectivo esperado y la diferencia en palabras', () => {
+    const conArqueo: CierreTurno = {
+      ...CIERRE,
+      arqueo: {
+        monto_inicial: 1000,
+        ingresos: 0,
+        retiros: 200,
+        gastos: 0,
+        pagos_proveedor: 0,
+        efectivo_esperado: 1700,
+        efectivo_contado: 1500,
+        diferencia: -200,
+      },
+    }
+    render(<ResumenCierre cierre={conArqueo} alSeguir={vi.fn()} />)
+    const arqueo = screen.getByRole('table', { name: 'Arqueo de caja' })
+    expect(within(arqueo).getByRole('row', { name: /^Efectivo esperado/ })).toHaveTextContent('$1.700')
+    expect(within(arqueo).getByRole('row', { name: /^Diferencia/ })).toHaveTextContent('Faltan $200')
+  })
+
+  it('sin efectivo inicial ni conteo lo dice, sin inventar cifras', () => {
+    const sinDatos: CierreTurno = {
+      ...CIERRE,
+      arqueo: {
+        monto_inicial: null,
+        ingresos: 0,
+        retiros: 0,
+        gastos: 0,
+        pagos_proveedor: 0,
+        efectivo_esperado: 900,
+        efectivo_contado: null,
+        diferencia: null,
+      },
+    }
+    render(<ResumenCierre cierre={sinDatos} alSeguir={vi.fn()} />)
+    expect(screen.getByText('Sin efectivo inicial cargado: la diferencia no sirve.')).toBeInTheDocument()
+    expect(within(screen.getByRole('table', { name: 'Arqueo de caja' })).getByRole('row', { name: /^Efectivo contado/ })).toHaveTextContent(
+      'Sin contar',
+    )
+  })
 })

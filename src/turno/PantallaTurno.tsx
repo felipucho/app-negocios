@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
-import type { CierreTurno, TotalesTurno } from './turno'
+import type { ArqueoTurno, CierreTurno, TotalesTurno } from './turno'
 
 interface PropsPedirApertura {
   alAbrir: () => Promise<void>
@@ -103,6 +103,7 @@ function DetalleCierre({ cierre }: { cierre: CierreTurno }) {
         {FECHA_HORA.format(new Date(cierre.apertura))} – {FECHA_HORA.format(new Date(cierre.cierre))}
       </p>
       <TablaTotales totales={cierre.totales} />
+      {cierre.arqueo && <TablaArqueo arqueo={cierre.arqueo} />}
     </>
   )
 }
@@ -129,7 +130,42 @@ function TablaTotales({ totales: t }: { totales: TotalesTurno }) {
   )
 }
 
-/** Cierre simple (decisión 26): total por medio de pago del turno, sin arqueo. */
+/** Arqueo (módulo movimientos_caja): lo que había en la caja contra lo que debería haber. */
+function TablaArqueo({ arqueo: a }: { arqueo: ArqueoTurno }) {
+  const filas: [string, string][] = [
+    ['Efectivo inicial', a.monto_inicial === null ? 'Sin cargar' : formatearPesos(a.monto_inicial)],
+    ['Ingresos', formatearPesos(a.ingresos)],
+    ['Retiros', formatearPesos(a.retiros)],
+    ['Gastos', formatearPesos(a.gastos)],
+    ['Pagos a proveedores', formatearPesos(a.pagos_proveedor)],
+    ['Efectivo esperado', formatearPesos(a.efectivo_esperado)],
+    ['Efectivo contado', a.efectivo_contado === null ? 'Sin contar' : formatearPesos(a.efectivo_contado)],
+    ['Diferencia', a.diferencia === null ? '—' : textoDiferencia(a.diferencia)],
+  ]
+  return (
+    <>
+      <h3>Arqueo de caja</h3>
+      {a.monto_inicial === null && <p className="aviso">Sin efectivo inicial cargado: la diferencia no sirve.</p>}
+      <table aria-label="Arqueo de caja">
+        <tbody>
+          {filas.map(([nombre, valor]) => (
+            <tr key={nombre}>
+              <th scope="row">{nombre}</th>
+              <td>{valor}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
+function textoDiferencia(diferencia: number): string {
+  if (diferencia === 0) return 'Cuadra'
+  return diferencia < 0 ? `Faltan ${formatearPesos(-diferencia)}` : `Sobran ${formatearPesos(diferencia)}`
+}
+
+/** Cierre del turno: total por medio de pago y, con el módulo movimientos_caja, el arqueo. */
 export function ResumenCierre({ cierre, alSeguir }: { cierre: CierreTurno; alSeguir: () => void }) {
   return (
     <section className="turno">

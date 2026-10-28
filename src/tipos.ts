@@ -26,11 +26,30 @@ export interface ProductoCache extends Producto {
   palabras: string[]
 }
 
-export interface LineaCarrito {
+/** Línea de un producto del catálogo. */
+export interface LineaProducto {
+  varios?: false
   productoId: string
   nombre: string
   precio: number
   cantidad: number
+}
+
+/** Línea "Varios" (módulo varios): importe libre sin producto. lineaId sólo la identifica en la pantalla. */
+export interface LineaVarios {
+  varios: true
+  lineaId: string
+  /** Descripción tipeada, o "Varios" si quedó vacía. Hasta 40 letras. */
+  nombre: string
+  precio: number
+  cantidad: number
+}
+
+export type LineaCarrito = LineaProducto | LineaVarios
+
+/** Id de la línea en la pantalla y en el carrito: el del producto, o el propio de una línea Varios. */
+export function idLinea(l: LineaCarrito): string {
+  return l.varios ? l.lineaId : l.productoId
 }
 
 export interface Cliente {

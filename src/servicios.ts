@@ -8,16 +8,22 @@ import { leerRankingSinCodigo, type FilaRanking } from './caja/ranking'
 import { borrarCache, sincronizarCatalogo, vaciarCacheAjena, type CacheCatalogo } from './catalogo/cache'
 import { crearFuenteSupabase } from './catalogo/fuente'
 import { registrarDispositivo, type Dispositivo } from './dispositivo/dispositivo'
+import { crearServicioFiado, type ServicioFiado } from './fiado/fiado'
 import { crearServicioJefe, type ServicioJefe } from './jefe/jefe'
+import { leerModulos, type Modulo } from './modulos/modulos'
 import { leerConfigNegocio, leerEstadoAbonoNegocio, type ConfigNegocio, type EstadoAbono } from './negocio/config'
-import { crearServicioClientes, fiadoActivo, type ServicioClientes } from './pagos/clientes'
+import { crearServicioClientes, type ServicioClientes } from './pagos/clientes'
+import { crearServicioPrecios, type ServicioPrecios } from './precios/precios'
 import { crearServicioProductos, type ServicioProductos } from './productos/productos'
+import { crearServicioStock, type ServicioStock } from './stock/stock'
 import { abrirTurno, cerrarTurno, leerTurnoAbierto, leerUltimoTurnoCerrado, type CierreTurno } from './turno/turno'
+import { crearServicioMovimientosCaja, type ServicioMovimientosCaja } from './turno/movimientosCaja'
 import type { LlamarRpc } from './venta/confirmar'
 
 /** Turno de una PC: lo que pide PantallaCaja más el cierre (tarea 8). */
 export interface ServicioTurnoPc extends ServicioTurno {
-  cerrar(): Promise<CierreTurno>
+  /** efectivoContado sólo con el módulo movimientos_caja: la base guarda el arqueo. */
+  cerrar(efectivoContado?: number): Promise<CierreTurno>
 }
 
 /** Todo lo que la app usa de afuera. En las pruebas, src/test/servicios.ts. */
@@ -30,12 +36,17 @@ export interface Servicios {
   sincronizarCatalogo(): Promise<unknown>
   catalogo: CatalogoCaja
   leerRanking(): Promise<FilaRanking[]>
-  fiadoActivo(): Promise<boolean>
+  /** Catálogo de módulos del negocio con su estado (modulos + modulos_negocio). */
+  leerModulos(): Promise<Modulo[]>
   clientes: ServicioClientes
   rpc: LlamarRpc
   turno(dispositivoId: string): ServicioTurnoPc
   productos(dispositivoId: string): ServicioProductos
   cajaDelDia(dispositivoId: string): ServicioCajaDelDia
+  precios(dispositivoId: string): ServicioPrecios
+  fiado(dispositivoId: string): ServicioFiado
+  stock(dispositivoId: string): ServicioStock
+  movimientos(dispositivoId: string): ServicioMovimientosCaja
   jefe: ServicioJefe
   leerConfig(): Promise<ConfigNegocio | null>
   leerEstadoAbono(): Promise<EstadoAbono | null>
@@ -86,17 +97,21 @@ export function crearServicios(supabase: SupabaseClient, db: CacheCatalogo, clav
     sincronizarCatalogo: sincronizar,
     catalogo: crearCatalogoCaja(db),
     leerRanking: () => leerRankingSinCodigo(supabase),
-    fiadoActivo: () => fiadoActivo(supabase),
+    leerModulos: () => leerModulos(supabase),
     clientes: crearServicioClientes(supabase),
     rpc: (funcion, args) => supabase.rpc(funcion, args),
     turno: (id) => ({
       leer: () => leerTurnoAbierto(supabase, id),
       abrir: () => abrirTurno(supabase, id),
-      cerrar: () => cerrarTurno(supabase, id),
+      cerrar: (efectivoContado) => cerrarTurno(supabase, id, efectivoContado),
       ultimoCerrado: () => leerUltimoTurnoCerrado(supabase, id),
     }),
     productos: (id) => crearServicioProductos(supabase, id, alCambiarCatalogo),
     cajaDelDia: (id) => crearServicioCajaDelDia(supabase, id),
+    precios: (id) => crearServicioPrecios(supabase, id),
+    fiado: (id) => crearServicioFiado(supabase, id),
+    stock: (id) => crearServicioStock(supabase, id),
+    movimientos: (id) => crearServicioMovimientosCaja(supabase, id),
     jefe: crearServicioJefe(supabase),
     // Logos sólo del Supabase del proyecto: es el único origen de imágenes que deja la CSP (tarea 19).
     leerConfig: () => leerConfigNegocio(supabase, import.meta.env.VITE_SUPABASE_URL),

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Cuenta } from './auth/cuenta'
 import { Kiosco } from './Kiosco'
-import { CUENTA_CAJA, CUENTA_JEFE, serviciosFalsos } from './test/servicios'
+import { CUENTA_CAJA, CUENTA_JEFE, modulosDePrueba, serviciosFalsos } from './test/servicios'
 
 function armar(cuenta: Cuenta, servicios = serviciosFalsos()) {
   const alCerrarSesion = vi.fn()
@@ -30,14 +30,14 @@ describe('Kiosco', () => {
   it('la caja no ve las pantallas del jefe', async () => {
     armar(CUENTA_CAJA)
     await screen.findByText('Caja · PC A')
-    expect(secciones()).toEqual(['Caja', 'Productos', 'Caja del día'])
+    expect(secciones()).toEqual(['Caja', 'Productos', 'Caja del día', 'Fiado'])
   })
 
   it('el jefe ve todas las secciones y abre el historial', async () => {
     const { servicios, user } = armar(CUENTA_JEFE)
     await screen.findByText('Jefe · PC A')
     expect(secciones()).toEqual([
-      'Caja', 'Productos', 'Caja del día', 'Historial', 'Módulo fiado', 'Anonimizar cliente', 'Calibrar escáner',
+      'Caja', 'Productos', 'Caja del día', 'Fiado', 'Historial', 'Módulo fiado', 'Anonimizar cliente', 'Calibrar escáner',
     ])
     await user.click(screen.getByRole('button', { name: 'Historial' }))
     expect(await screen.findByRole('table', { name: 'Historial' })).toBeInTheDocument()
@@ -194,7 +194,7 @@ describe('Kiosco', () => {
 
   it('si no se pudo leer el módulo fiado, lo dice en vez de mostrarlo apagado y reintenta solo', async () => {
     const servicios = serviciosFalsos()
-    servicios.fiadoActivo.mockRejectedValueOnce(new Error('sin red'))
+    servicios.leerModulos.mockRejectedValueOnce(new Error('sin red'))
     const { user } = armar(CUENTA_JEFE, servicios)
     await user.click(await screen.findByRole('button', { name: 'Módulo fiado' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer el módulo fiado')
@@ -218,15 +218,31 @@ describe('Kiosco', () => {
       Reflect.deleteProperty(document, 'visibilityState')
     }
 
-    servicios.fiadoActivo.mockResolvedValueOnce(false) // el jefe lo apagó desde otra PC
+    servicios.leerModulos.mockResolvedValueOnce(modulosDePrueba([])) // el jefe lo apagó desde otra PC
     revisar()
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Fiado activo' })).not.toBeChecked())
 
-    servicios.fiadoActivo.mockRejectedValueOnce(new Error('sin red'))
+    servicios.leerModulos.mockRejectedValueOnce(new Error('sin red'))
     revisar()
-    await waitFor(() => expect(servicios.fiadoActivo).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(servicios.leerModulos).toHaveBeenCalledTimes(3))
     expect(screen.getByRole('checkbox', { name: 'Fiado activo' })).not.toBeChecked()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('muestra las secciones de los módulos activos del negocio', async () => {
+    armar(CUENTA_JEFE, serviciosFalsos({ modulos: ['stock', 'movimientos_caja', 'precios'] }))
+    await waitFor(() =>
+      expect(secciones()).toEqual([
+        'Caja', 'Productos', 'Caja del día', 'Movimientos de caja', 'Stock', 'Fiado', 'Precios', 'Historial', 'Módulo fiado',
+        'Anonimizar cliente', 'Calibrar escáner',
+      ]),
+    )
+  })
+
+  it('la caja ve Stock con su módulo activo, pero no Precios', async () => {
+    armar(CUENTA_CAJA, serviciosFalsos({ modulos: ['precios', 'stock'] }))
+    await waitFor(() => expect(secciones()).toContain('Stock'))
+    expect(secciones()).toEqual(['Caja', 'Productos', 'Caja del día', 'Stock', 'Fiado'])
   })
 
   it('con la caja oculta se puede seleccionar texto con el mouse', async () => {

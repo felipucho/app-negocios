@@ -23,6 +23,11 @@ describe('argumentosConfirmar y claveContenido', () => {
     })
   })
 
+  it('una línea Varios va sin producto_id, con su precio, cantidad y descripción', () => {
+    const conVarios: PedidoVenta = { ...pedido, lineas: [{ varios: true, lineaId: 'v1', nombre: 'Recarga', precio: 500, cantidad: 3 }] }
+    expect(argumentosConfirmar('v1', conVarios).p_lineas).toEqual([{ varios: true, precio: 500, cantidad: 3, descripcion: 'Recarga' }])
+  })
+
   it('la clave cambia si cambia el contenido', () => {
     expect(claveContenido(pedido)).toBe(claveContenido({ ...pedido }))
     expect(claveContenido(pedido)).not.toBe(

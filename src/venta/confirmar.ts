@@ -13,13 +13,15 @@ export type ErrorConfirmar =
   | 'linea_invalida'
   | 'pago_invalido'
   | 'total_distinto'
+  | 'modulo_deshabilitado'
+  | 'limite_fiado'
 
 // satisfies Record<...>: un código nuevo en el tipo que falte acá no compila.
 const CODIGOS = {
   importe_invalido: true, venta_vacia: true, no_suma_total: true, efectivo_insuficiente: true, entrega_sin_efectivo: true,
   fiado_deshabilitado: true, fiado_sin_cliente: true, sin_cuenta: true, dispositivo_desconocido: true, pedido_invalido: true,
   venta_id_reusado: true, sin_turno: true, producto_no_disponible: true, linea_invalida: true, pago_invalido: true,
-  total_distinto: true,
+  total_distinto: true, modulo_deshabilitado: true, limite_fiado: true,
 } satisfies Record<ErrorConfirmar, true>
 
 const CODIGOS_JWT = ['PGRST301', 'PGRST302', 'PGRST303']
@@ -92,7 +94,11 @@ export function argumentosConfirmar(ventaId: string, p: PedidoVenta): Record<str
   return {
     p_venta_id: ventaId,
     p_dispositivo_id: p.dispositivoId,
-    p_lineas: p.lineas.map((l) => ({ producto_id: l.productoId, cantidad: l.cantidad, precio_visto: l.precio })),
+    p_lineas: p.lineas.map((l) =>
+      l.varios
+        ? { varios: true, precio: l.precio, cantidad: l.cantidad, descripcion: l.nombre }
+        : { producto_id: l.productoId, cantidad: l.cantidad, precio_visto: l.precio },
+    ),
     p_pagos: p.pagos,
     p_total: p.total,
     p_efectivo_entregado: p.efectivoEntregado,

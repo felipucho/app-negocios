@@ -12,6 +12,8 @@ export interface GestionProducto {
 export type Redondeo = 1 | 5 | 10 | 50 | 100
 
 export interface PedidoAumento {
+  /** Id de la operación: lo elige quien llama y lo repite en cada reintento del mismo aumento. */
+  operacionId: string
   /** De −90 a 1000, distinto de 0. */
   porcentaje: number
   /** Redondea hacia arriba al múltiplo. */
@@ -21,12 +23,18 @@ export interface PedidoAumento {
   proveedor?: string
 }
 
+/** ya_existia: esa operación ya se había aplicado; esta vez no cambió nada y cantidad es lo que cambió entonces. */
+export interface ResultadoAumento {
+  cantidad: number
+  ya_existia: boolean
+}
+
 export interface ServicioPrecios {
   leerGestion(): Promise<GestionProducto[]>
   /** Reemplaza los tres valores; null = sin dato. */
   editarGestion(productoId: string, datos: Omit<GestionProducto, 'producto_id'>): Promise<GestionProducto>
-  /** Devuelve cuántos precios cambiaron. */
-  aumentarPrecios(pedido: PedidoAumento): Promise<number>
+  /** Cuántos precios cambiaron. Con el mismo operacionId, una segunda vez no aplica nada. */
+  aumentarPrecios(pedido: PedidoAumento): Promise<ResultadoAumento>
 }
 
 export const MENSAJES_PRECIOS: Record<string, string> = {
@@ -65,13 +73,14 @@ export function crearServicioPrecios(supabase: SupabaseClient, dispositivoId: st
     async aumentarPrecios(p) {
       const { data, error } = await supabase.rpc('aumentar_precios', {
         p_dispositivo_id: dispositivoId,
+        p_operacion_id: p.operacionId,
         p_porcentaje: p.porcentaje,
         p_redondeo: p.redondeo,
         p_rubro: p.rubro ?? null,
         p_proveedor: p.proveedor ?? null,
       })
       if (error) throw error
-      return (data as { cantidad: number }).cantidad
+      return data as ResultadoAumento
     },
   }
 }

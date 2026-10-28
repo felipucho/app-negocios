@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(56);
 
 -- 1 a 3: estructura
 select tables_are(
@@ -8,7 +8,7 @@ select tables_are(
   array['negocios', 'cuentas', 'config_negocio', 'modulos', 'modulos_negocio', 'dispositivos',
         'productos', 'clientes', 'turnos', 'ventas', 'lineas_venta', 'pagos_venta',
         'anulaciones', 'historial', 'version_app', 'productos_gestion', 'pagos_fiado', 'movimientos_caja',
-        'stock_productos', 'movimientos_stock'],
+        'stock_productos', 'movimientos_stock', 'aumentos_precios'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 
@@ -158,6 +158,12 @@ insert into public.movimientos_caja (id, negocio_id, turno_id, dispositivo_id, c
   ('b6000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'b3000000-0000-0000-0000-000000000001',
    'b1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000b', now(), 'retiro', 100);
 
+insert into public.aumentos_precios (id, negocio_id, cuenta_id, dispositivo_id, porcentaje, redondeo, cantidad) values
+  ('a9000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-00000000000a',
+   'a1000000-0000-0000-0000-000000000001', 10, 1, 1),
+  ('b9000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-00000000000b',
+   'b1000000-0000-0000-0000-000000000001', 10, 1, 1);
+
 insert into public.pagos_fiado (id, negocio_id, cliente_id, turno_id, dispositivo_id, cuenta_id, fecha, medio, importe) values
   ('a7000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a5000000-0000-0000-0000-000000000001',
    'a3000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a',
@@ -201,7 +207,8 @@ select set_eq(
      select pg_temp.tablas_con_filas_de('b0000000-0000-0000-0000-000000000000') $$,
   $$ values ('negocios'), ('cuentas'), ('config_negocio'), ('modulos_negocio'), ('dispositivos'), ('productos'),
             ('clientes'), ('turnos'), ('ventas'), ('lineas_venta'), ('pagos_venta'), ('anulaciones'), ('historial'),
-            ('productos_gestion'), ('stock_productos'), ('movimientos_stock'), ('movimientos_caja'), ('pagos_fiado') $$,
+            ('productos_gestion'), ('stock_productos'), ('movimientos_stock'), ('movimientos_caja'), ('pagos_fiado'),
+            ('aumentos_precios') $$,
   'hay filas de A y de B en todas las tablas del negocio'
 );
 
@@ -253,7 +260,8 @@ select set_has(
             ('historial:historial_solo_agrega'), ('historial:historial_sin_truncate'),
             ('pagos_fiado:pagos_fiado_solo_agrega'), ('pagos_fiado:pagos_fiado_sin_truncate'),
             ('movimientos_caja:movimientos_caja_solo_agrega'), ('movimientos_caja:movimientos_caja_sin_truncate'),
-            ('movimientos_stock:movimientos_stock_solo_agrega'), ('movimientos_stock:movimientos_stock_sin_truncate') $$,
+            ('movimientos_stock:movimientos_stock_solo_agrega'), ('movimientos_stock:movimientos_stock_sin_truncate'),
+            ('aumentos_precios:aumentos_precios_solo_agrega'), ('aumentos_precios:aumentos_precios_sin_truncate') $$,
   'las tablas de sólo agregar tienen activos sus triggers de update, delete y truncate'
 );
 
@@ -432,6 +440,11 @@ select is_empty(
   'la caja no ve los movimientos de stock'
 );
 
+select is_empty(
+  $$ select id from public.aumentos_precios $$,
+  'la caja no ve los aumentos de precios'
+);
+
 select throws_ok(
   $$ update public.stock_productos set cantidad = 99 $$,
   '42501', 'permission denied for table stock_productos',
@@ -488,6 +501,12 @@ select results_eq(
   $$ select cantidad from public.movimientos_stock $$,
   $$ values (10) $$,
   'el jefe ve los movimientos de stock de su kiosco'
+);
+
+select results_eq(
+  $$ select id from public.aumentos_precios $$,
+  $$ values ('a9000000-0000-0000-0000-000000000001'::uuid) $$,
+  'el jefe ve los aumentos de precios de su kiosco'
 );
 
 select is_empty(

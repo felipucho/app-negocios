@@ -39,6 +39,8 @@ const TEXTO_RECHAZO: Record<ErrorConfirmar, string> = {
   linea_invalida: 'Hay una cantidad inválida en la venta.',
   pago_invalido: 'Hay un medio de pago repetido o inválido.',
   total_distinto: 'El total no coincide con el de la base. Volvé a la venta y confirmá de nuevo.',
+  modulo_deshabilitado: 'El módulo Varios se apagó mientras vendías. Quitá las líneas Varios y confirmá de nuevo.',
+  limite_fiado: 'Con este fiado, el cliente pasa de su límite. Cobrá una parte con otro medio o quitá el fiado.',
 }
 
 const SIN_IMPORTES: Record<Medio, string> = { efectivo: '', transferencia: '', tarjeta: '', fiado: '' }
@@ -56,7 +58,7 @@ function textoNoDisponibles(detalle: string | null, lineas: readonly LineaCarrit
     return generico
   }
   const noVendidos: unknown[] = Array.isArray(ids) ? ids : []
-  const nombres = lineas.filter((l) => noVendidos.includes(l.productoId)).map((l) => l.nombre)
+  const nombres = lineas.filter((l) => !l.varios && noVendidos.includes(l.productoId)).map((l) => l.nombre)
   if (nombres.length === 0) return generico
   const uno = nombres.length === 1
   return `Ya no ${uno ? 'está' : 'están'} a la venta: ${nombres.join(', ')}. Volvé a la venta y quitalo${uno ? '' : 's'}.`
@@ -95,7 +97,7 @@ function CampoImporte({ etiqueta, nombre, valor, autoFocus, ref, alCambiar, alEn
 export interface PropsPantallaPagos {
   sesion: SesionCobro
   dispositivoId: string
-  /** modulo_activo('fiado'), leído por la tarea 17 con fiadoActivo. */
+  /** modulo_activo('fiado'), leído con leerModulos en Kiosco. */
   fiadoHabilitado: boolean
   clientes: ServicioClientes
   /** (funcion, args) => supabase.rpc(funcion, args) */

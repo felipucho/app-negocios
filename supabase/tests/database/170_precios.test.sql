@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(17);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-0000-0000-00000000000a', 'pre-caja@prueba.local'),
@@ -31,7 +31,7 @@ select is(public.editar_gestion_producto('a2000000-0000-0000-0000-000000000001',
 select throws_ok($$ select public.editar_gestion_producto('a2000000-0000-0000-0000-000000000001', 10.5, null, null) $$,
   'P0001', 'costo_invalido', 'el costo es en pesos enteros');
 
-select is(public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 10, 10, 'GOLOSINAS') ->> 'cantidad', '1',
+select is(public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000001', 10, 10, 'GOLOSINAS') ->> 'cantidad', '1',
   'el aumento por rubro toca sólo ese rubro, sin distinguir mayúsculas');
 select results_eq($$ select nombre, precio from public.productos order by nombre $$,
   $$ values ('Alfajor'::text, 990), ('Gaseosa', 1000) $$, 'Alfajor sube 10 %; Gaseosa no es del rubro');
@@ -41,20 +41,33 @@ select results_eq(
   $$ values ('900'::text, '990'::text, 'a1000000-0000-0000-0000-000000000001'::uuid) $$,
   'cada precio aumentado queda en el historial con la PC');
 
-select is(public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 7, 50) ->> 'cantidad', '2',
+select is(public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000002', 7, 50) ->> 'cantidad', '2',
   'sin filtro toca todos');
 select results_eq($$ select precio from public.productos order by nombre $$,
   $$ values (1100), (1100) $$, 'redondea hacia arriba al múltiplo pedido (1059,3 → 1100; 1070 → 1100)');
+select is(public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000002', 7, 50) ->> 'ya_existia', 'true',
+  'repetir la misma operación devuelve el resultado guardado');
+select results_eq($$ select precio from public.productos order by nombre $$,
+  $$ values (1100), (1100) $$, 'y no vuelve a subir los precios');
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', null, 10, 10) $$,
+  'P0001', 'pedido_invalido', 'sin id de operación no se aplica nada');
+select results_eq($$ select cantidad from public.aumentos_precios order by cantidad $$,
+  $$ values (1), (2) $$, 'cada aumento aplicado queda registrado con su cantidad');
 
-select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 0, 10) $$,
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000003', 0, 10) $$,
   'P0001', 'porcentaje_invalido', 'un aumento de 0 % no se acepta');
-select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 10, 7) $$,
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000004', 10, 7) $$,
   'P0001', 'redondeo_invalido', 'el redondeo es 1, 5, 10, 50 o 100');
 
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000000a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
-select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 10, 10) $$,
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000005', 10, 10) $$,
   'P0001', 'solo_jefe', 'la caja no aumenta precios');
+select is((select count(*) from public.aumentos_precios)::text, '0', 'la caja no ve el registro de aumentos');
+
+reset role;
+select throws_ok($$ update public.aumentos_precios set cantidad = 0 $$,
+  'P0001', 'aumentos_precios: no se edita ni se borra', 'el registro de aumentos no se edita');
 
 select * from finish();
 rollback;

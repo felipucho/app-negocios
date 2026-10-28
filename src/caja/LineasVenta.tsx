@@ -1,13 +1,13 @@
 import { formatearPesos } from '../lib/plata'
-import type { LineaCarrito } from '../tipos'
+import { idLinea, type LineaCarrito } from '../tipos'
 
 export interface PropsLineasVenta {
   lineas: readonly LineaCarrito[]
-  /** Producto recién agregado: su línea se resalta. */
+  /** Línea recién agregada (idLinea): se resalta. */
   resaltado: string | null
   /** Con el cobro abierto no se cambian cantidades. aria-disabled y no disabled: ver el botón Cobrar en PantallaCaja. */
   bloqueada: boolean
-  alCambiar(productoId: string, delta: 1 | -1): void
+  alCambiar(lineaId: string, delta: 1 | -1): void
 }
 
 export function LineasVenta({ lineas, resaltado, bloqueada, alCambiar }: PropsLineasVenta) {
@@ -23,36 +23,39 @@ export function LineasVenta({ lineas, resaltado, bloqueada, alCambiar }: PropsLi
         </tr>
       </thead>
       <tbody>
-        {lineas.map((l) => (
-          <tr key={l.productoId} className={l.productoId === resaltado ? 'linea linea--nueva' : 'linea'}>
-            <td>{l.nombre}</td>
-            <td>{formatearPesos(l.precio)}</td>
-            <td>
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={`Restar uno a ${l.nombre}`}
-                aria-disabled={bloqueada}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => !bloqueada && alCambiar(l.productoId, -1)}
-              >
-                −
-              </button>
-              <span className="cantidad">{l.cantidad}</span>
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={`Sumar uno a ${l.nombre}`}
-                aria-disabled={bloqueada}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => !bloqueada && alCambiar(l.productoId, 1)}
-              >
-                +
-              </button>
-            </td>
-            <td>{formatearPesos(l.precio * l.cantidad)}</td>
-          </tr>
-        ))}
+        {lineas.map((l) => {
+          const id = idLinea(l)
+          return (
+            <tr key={id} className={id === resaltado ? 'linea linea--nueva' : 'linea'}>
+              <td>{l.nombre}</td>
+              <td>{formatearPesos(l.precio)}</td>
+              <td>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={`Restar uno a ${l.nombre}`}
+                  aria-disabled={bloqueada}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => !bloqueada && alCambiar(id, -1)}
+                >
+                  −
+                </button>
+                <span className="cantidad">{l.cantidad}</span>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={`Sumar uno a ${l.nombre}`}
+                  aria-disabled={bloqueada}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => !bloqueada && alCambiar(id, 1)}
+                >
+                  +
+                </button>
+              </td>
+              <td>{formatearPesos(l.precio * l.cantidad)}</td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

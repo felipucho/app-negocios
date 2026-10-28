@@ -12,11 +12,29 @@ describe('carritoReducer', () => {
   })
 
   it('+ suma y − en 1 quita la línea', () => {
-    let c = carritoReducer(con(coca), { tipo: 'cambiarCantidad', productoId: 'p1', delta: 1 })
+    let c = carritoReducer(con(coca), { tipo: 'cambiarCantidad', lineaId: 'p1', delta: 1 })
     expect(c.lineas[0].cantidad).toBe(2)
-    c = carritoReducer(c, { tipo: 'cambiarCantidad', productoId: 'p1', delta: -1 })
-    c = carritoReducer(c, { tipo: 'cambiarCantidad', productoId: 'p1', delta: -1 })
+    c = carritoReducer(c, { tipo: 'cambiarCantidad', lineaId: 'p1', delta: -1 })
+    c = carritoReducer(c, { tipo: 'cambiarCantidad', lineaId: 'p1', delta: -1 })
     expect(c.lineas).toEqual([])
+  })
+
+  it('agregarVarios suma una línea sin producto, que + y − tocan por lineaId', () => {
+    const linea = { varios: true as const, lineaId: 'v1', nombre: 'Recarga', precio: 500, cantidad: 2 }
+    let c = carritoReducer(con(coca), { tipo: 'agregarVarios', linea })
+    expect(c.lineas).toEqual([{ productoId: 'p1', nombre: 'Coca Cola 500', precio: 1500, cantidad: 1 }, linea])
+    c = carritoReducer(c, { tipo: 'cambiarCantidad', lineaId: 'v1', delta: -1 })
+    expect(c.lineas[1].cantidad).toBe(1)
+    expect(totalCarrito(c)).toBe(2000)
+  })
+
+  it('actualizarPrecios cambia los productos y deja las líneas Varios como están', () => {
+    const linea = { varios: true as const, lineaId: 'v1', nombre: 'Varios', precio: 500, cantidad: 1 }
+    const c = carritoReducer(carritoReducer(con(coca), { tipo: 'agregarVarios', linea }), {
+      tipo: 'actualizarPrecios',
+      precios: { p1: 1700, v1: 999 },
+    })
+    expect(c.lineas.map((l) => l.precio)).toEqual([1700, 500])
   })
 
   it('actualizarPrecios cambia sólo los indicados', () => {

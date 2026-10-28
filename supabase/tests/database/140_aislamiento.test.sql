@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(59);
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
 select is_empty($$
@@ -51,6 +51,10 @@ insert into public.modulos_negocio (negocio_id, modulo, activo) values
   ('b0000000-0000-0000-0000-000000000000', 'movimientos_caja', true),
   ('b0000000-0000-0000-0000-000000000000', 'stock', true),
   ('b0000000-0000-0000-0000-000000000000', 'varios', true);
+-- Un aumento ya aplicado en A, para probar que B no lo ve.
+insert into public.aumentos_precios (id, negocio_id, cuenta_id, dispositivo_id, porcentaje, redondeo, cantidad) values
+  ('e0000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-00000000000a',
+   'a1000000-0000-0000-0000-000000000001', 10, 1, 1);
 
 -- 4: A vende
 set local role authenticated;
@@ -137,10 +141,12 @@ select throws_ok($$ select public.anonimizar_cliente('a5000000-0000-0000-0000-00
   'P0001', 'cliente_desconocido', 'el jefe de B no anonimiza un cliente de A');
 select throws_ok($$ select public.editar_gestion_producto('a2000000-0000-0000-0000-000000000001', 1, null, null) $$,
   'P0001', 'producto_desconocido', 'el jefe de B no carga costos de productos de A');
-select is(public.aumentar_precios('b1000000-0000-0000-0000-000000000001', 10, 1) ->> 'cantidad', '1',
+select is(public.aumentar_precios('b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001', 10, 1) ->> 'cantidad', '1',
   'el aumento de B toca sólo su producto (el de A sigue en 900, ver abajo)');
-select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 10, 1) $$,
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000002', 10, 1) $$,
   'P0001', 'dispositivo_desconocido', 'el jefe de B no aumenta precios con la PC de A');
+select is((select count(*)::int from public.aumentos_precios where negocio_id = 'a0000000-0000-0000-0000-000000000000'), 0,
+  'el jefe de B no ve los aumentos de A');
 select throws_ok($$ select public.ajustar_stock('b1000000-0000-0000-0000-000000000001',
     'a2000000-0000-0000-0000-000000000001', null, 1, null) $$,
   'P0001', 'producto_desconocido', 'el jefe de B no ajusta stock de productos de A');
