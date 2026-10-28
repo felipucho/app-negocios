@@ -1,13 +1,14 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(44);
+select plan(54);
 
 -- 1 a 3: estructura
 select tables_are(
   'public',
   array['negocios', 'cuentas', 'config_negocio', 'modulos', 'modulos_negocio', 'dispositivos',
         'productos', 'clientes', 'turnos', 'ventas', 'lineas_venta', 'pagos_venta',
-        'anulaciones', 'historial', 'version_app'],
+        'anulaciones', 'historial', 'version_app', 'productos_gestion', 'pagos_fiado', 'movimientos_caja',
+        'stock_productos', 'movimientos_stock'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 
@@ -20,9 +21,9 @@ select is_empty(
 );
 
 select results_eq(
-  $$ select clave, activo_por_defecto from public.modulos $$,
-  $$ values ('fiado'::text, true) $$,
-  'el único módulo es fiado, activo por defecto'
+  $$ select clave, activo_por_defecto from public.modulos order by clave $$,
+  $$ values ('fiado'::text, true), ('movimientos_caja', false), ('precios', false), ('stock', false), ('varios', false) $$,
+  'los módulos: fiado activo por defecto; los de 2026-10-27, apagados'
 );
 
 -- 4 a 6: permisos. Los objetos zz_ simulan los que creen migraciones futuras (default privileges).
@@ -134,6 +135,40 @@ insert into public.historial (negocio_id, tipo, cuenta_id, dispositivo_id, entid
    'b1000000-0000-0000-0000-000000000001', 'productos', 'b2000000-0000-0000-0000-000000000001',
    '{"precio": 600}', '{"precio": 700}');
 
+-- Tablas de los módulos de 2026-10-27. En A, una fila de hoy y una de ayer donde la RLS distingue el día.
+insert into public.productos_gestion (producto_id, negocio_id, costo, rubro, proveedor) values
+  ('a2000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 500, 'Golosinas', 'Distri A'),
+  ('b2000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 400, null, null);
+
+insert into public.stock_productos (producto_id, negocio_id, cantidad, minimo) values
+  ('a2000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 10, 2),
+  ('b2000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 5, 0);
+
+insert into public.movimientos_stock (negocio_id, lote_id, producto_id, tipo, cantidad, cuenta_id, dispositivo_id) values
+  ('a0000000-0000-0000-0000-000000000000', gen_random_uuid(), 'a2000000-0000-0000-0000-000000000001', 'ingreso', 10,
+   'c0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-000000000001'),
+  ('b0000000-0000-0000-0000-000000000000', gen_random_uuid(), 'b2000000-0000-0000-0000-000000000001', 'ingreso', 5,
+   'c0000000-0000-0000-0000-00000000000b', 'b1000000-0000-0000-0000-000000000001');
+
+insert into public.movimientos_caja (id, negocio_id, turno_id, dispositivo_id, cuenta_id, fecha, tipo, importe) values
+  ('a6000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a3000000-0000-0000-0000-000000000001',
+   'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a', now(), 'retiro', 100),
+  ('a6000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000000', 'a3000000-0000-0000-0000-000000000001',
+   'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a', now() - interval '1 day', 'gasto', 50),
+  ('b6000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'b3000000-0000-0000-0000-000000000001',
+   'b1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000b', now(), 'retiro', 100);
+
+insert into public.pagos_fiado (id, negocio_id, cliente_id, turno_id, dispositivo_id, cuenta_id, fecha, medio, importe) values
+  ('a7000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a5000000-0000-0000-0000-000000000001',
+   'a3000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a',
+   now(), 'efectivo', 100),
+  ('a7000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000000', 'a5000000-0000-0000-0000-000000000001',
+   'a3000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a',
+   now() - interval '1 day', 'efectivo', 100),
+  ('b7000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000000', 'b5000000-0000-0000-0000-000000000001',
+   'b3000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000b',
+   now(), 'efectivo', 100);
+
 -- Tablas de public con alguna fila del negocio dado que quien llama puede ver
 -- (negocios por id; el resto, toda tabla con columna negocio_id, también las que agreguen tareas futuras).
 create function pg_temp.tablas_con_filas_de(p_negocio uuid) returns setof text language plpgsql as $f$
@@ -165,7 +200,8 @@ select set_eq(
      intersect
      select pg_temp.tablas_con_filas_de('b0000000-0000-0000-0000-000000000000') $$,
   $$ values ('negocios'), ('cuentas'), ('config_negocio'), ('modulos_negocio'), ('dispositivos'), ('productos'),
-            ('clientes'), ('turnos'), ('ventas'), ('lineas_venta'), ('pagos_venta'), ('anulaciones'), ('historial') $$,
+            ('clientes'), ('turnos'), ('ventas'), ('lineas_venta'), ('pagos_venta'), ('anulaciones'), ('historial'),
+            ('productos_gestion'), ('stock_productos'), ('movimientos_stock'), ('movimientos_caja'), ('pagos_fiado') $$,
   'hay filas de A y de B en todas las tablas del negocio'
 );
 
@@ -214,7 +250,10 @@ select set_has(
             ('lineas_venta:lineas_venta_solo_agrega'), ('lineas_venta:lineas_venta_sin_truncate'),
             ('pagos_venta:pagos_venta_solo_agrega'), ('pagos_venta:pagos_venta_sin_truncate'),
             ('anulaciones:anulaciones_solo_agrega'), ('anulaciones:anulaciones_sin_truncate'),
-            ('historial:historial_solo_agrega'), ('historial:historial_sin_truncate') $$,
+            ('historial:historial_solo_agrega'), ('historial:historial_sin_truncate'),
+            ('pagos_fiado:pagos_fiado_solo_agrega'), ('pagos_fiado:pagos_fiado_sin_truncate'),
+            ('movimientos_caja:movimientos_caja_solo_agrega'), ('movimientos_caja:movimientos_caja_sin_truncate'),
+            ('movimientos_stock:movimientos_stock_solo_agrega'), ('movimientos_stock:movimientos_stock_sin_truncate') $$,
   'las tablas de sólo agregar tienen activos sus triggers de update, delete y truncate'
 );
 
@@ -236,8 +275,8 @@ select results_eq(
 );
 
 select results_eq(
-  $$ select clave from public.modulos $$,
-  $$ values ('fiado'::text) $$,
+  $$ select clave from public.modulos order by clave $$,
+  $$ values ('fiado'::text), ('movimientos_caja'), ('precios'), ('stock'), ('varios') $$,
   'authenticated ve el catálogo de módulos'
 );
 
@@ -364,6 +403,41 @@ select throws_ok(
   'la app no escribe directo en modulos_negocio'
 );
 
+-- Módulos de 2026-10-27, caja A
+select is_empty(
+  $$ select producto_id from public.productos_gestion $$,
+  'la caja no ve costos, rubros ni proveedores'
+);
+
+select results_eq(
+  $$ select id from public.movimientos_caja $$,
+  $$ values ('a6000000-0000-0000-0000-000000000001'::uuid) $$,
+  'la caja ve sólo los movimientos de caja de hoy'
+);
+
+select results_eq(
+  $$ select id from public.pagos_fiado $$,
+  $$ values ('a7000000-0000-0000-0000-000000000001'::uuid) $$,
+  'la caja ve sólo los cobros de fiado de hoy'
+);
+
+select results_eq(
+  $$ select cantidad from public.stock_productos $$,
+  $$ values (10) $$,
+  'la caja ve el stock de su kiosco'
+);
+
+select is_empty(
+  $$ select id from public.movimientos_stock $$,
+  'la caja no ve los movimientos de stock'
+);
+
+select throws_ok(
+  $$ update public.stock_productos set cantidad = 99 $$,
+  '42501', 'permission denied for table stock_productos',
+  'la app no edita el stock directo (sólo por funciones)'
+);
+
 -- 37 a 41: cuenta jefe del kiosco A
 select set_config('request.jwt.claims',
   '{"sub":"c0000000-0000-0000-0000-00000000001a","role":"authenticated","negocio_id":"a0000000-0000-0000-0000-000000000000"}', true);
@@ -390,6 +464,30 @@ select results_eq(
   $$ select venta_id from public.anulaciones order by venta_id $$,
   $$ values ('a4000000-0000-0000-0000-000000000001'::uuid), ('a4000000-0000-0000-0000-000000000002'::uuid) $$,
   'el jefe ve todas las anulaciones'
+);
+
+select results_eq(
+  $$ select costo from public.productos_gestion $$,
+  $$ values (500) $$,
+  'el jefe ve los costos de su kiosco'
+);
+
+select results_eq(
+  $$ select id from public.movimientos_caja order by id $$,
+  $$ values ('a6000000-0000-0000-0000-000000000001'::uuid), ('a6000000-0000-0000-0000-000000000002'::uuid) $$,
+  'el jefe ve los movimientos de caja de todos los días'
+);
+
+select results_eq(
+  $$ select id from public.pagos_fiado order by id $$,
+  $$ values ('a7000000-0000-0000-0000-000000000001'::uuid), ('a7000000-0000-0000-0000-000000000002'::uuid) $$,
+  'el jefe ve los cobros de fiado de todos los días'
+);
+
+select results_eq(
+  $$ select cantidad from public.movimientos_stock $$,
+  $$ values (10) $$,
+  'el jefe ve los movimientos de stock de su kiosco'
 );
 
 select is_empty(

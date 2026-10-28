@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(58);
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
 select is_empty($$
@@ -17,7 +17,9 @@ select set_eq(
   $$ select p.proname::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef $$,
   $$ values ('abrir_turno'), ('alta_cliente'), ('alta_producto_caja'), ('anonimizar_cliente'), ('anular_venta'),
             ('caja_del_dia'), ('cambiar_modulo_fiado'), ('cerrar_turno'), ('clientes_con_telefono'), ('confirmar_venta'), ('editar_producto'),
-            ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ultimo_turno_cerrado'), ('ventas_del_dia') $$,
+            ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ultimo_turno_cerrado'), ('ventas_del_dia'),
+            ('ajustar_stock'), ('aumentar_precios'), ('cobrar_fiado'), ('editar_gestion_producto'), ('fijar_limite_fiado'),
+            ('fijar_monto_inicial'), ('ingresar_stock'), ('registrar_movimiento_caja'), ('saldos_fiado') $$,
   'cada función security definer de public tiene su caso de aislamiento en este archivo');
 
 insert into auth.users (id, email) values
@@ -43,6 +45,12 @@ insert into public.productos (id, negocio_id, nombre, precio) values
 insert into public.clientes (id, negocio_id, nombre) values
   ('a5000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'Cliente de A');
 insert into public.modulos_negocio (negocio_id, modulo, activo) values ('a0000000-0000-0000-0000-000000000000', 'fiado', false);
+-- B con los módulos de 2026-10-27 prendidos: si no, sus intentos frenan en modulo_deshabilitado y no prueban aislamiento.
+insert into public.modulos_negocio (negocio_id, modulo, activo) values
+  ('b0000000-0000-0000-0000-000000000000', 'precios', true),
+  ('b0000000-0000-0000-0000-000000000000', 'movimientos_caja', true),
+  ('b0000000-0000-0000-0000-000000000000', 'stock', true),
+  ('b0000000-0000-0000-0000-000000000000', 'varios', true);
 
 -- 4: A vende
 set local role authenticated;
@@ -101,6 +109,22 @@ select throws_ok($$ select public.editar_producto(p_producto_id => 'a2000000-000
   'P0001', 'producto_desconocido', 'B no edita productos de A');
 select throws_ok($$ select public.alta_producto_caja('a1000000-0000-0000-0000-000000000001', '7790099', 'Intruso', 100) $$,
   'P0001', 'dispositivo_desconocido', 'B no da de alta productos con la PC de A');
+select throws_ok($$ select public.ingresar_stock(gen_random_uuid(), 'a1000000-0000-0000-0000-000000000001',
+    '[{"producto_id":"b2000000-0000-0000-0000-000000000001","cantidad":1}]') $$,
+  'P0001', 'dispositivo_desconocido', 'B no ingresa stock con la PC de A');
+select throws_ok($$ select public.ingresar_stock(gen_random_uuid(), 'b1000000-0000-0000-0000-000000000001',
+    '[{"producto_id":"a2000000-0000-0000-0000-000000000001","cantidad":1}]') $$,
+  'P0001', 'producto_desconocido', 'B no ingresa stock a productos de A');
+select throws_ok($$ select public.registrar_movimiento_caja(gen_random_uuid(), 'a1000000-0000-0000-0000-000000000001',
+    'retiro', 10) $$,
+  'P0001', 'dispositivo_desconocido', 'B no registra movimientos en la caja de A');
+select throws_ok($$ select public.fijar_monto_inicial('a1000000-0000-0000-0000-000000000001', 100) $$,
+  'P0001', 'dispositivo_desconocido', 'B no fija el monto inicial del turno de A');
+select throws_ok($$ select public.cobrar_fiado(gen_random_uuid(), 'b1000000-0000-0000-0000-000000000001',
+    'a5000000-0000-0000-0000-000000000001', 'efectivo', 10) $$,
+  'P0001', 'cliente_desconocido', 'B no cobra deuda a un cliente de A');
+select results_eq($$ select nombre from public.saldos_fiado() $$,
+  $$ values ('Cliente de B'::text) $$, 'saldos_fiado de B no trae clientes de A');
 
 -- 28 a 39: el jefe de B
 select set_config('request.jwt.claims',
@@ -111,6 +135,17 @@ select throws_ok($$ select public.anular_venta('a4000000-0000-0000-0000-00000000
   'P0001', 'venta_desconocida', 'el jefe de B, que anula cualquier día, no anula una venta de A');
 select throws_ok($$ select public.anonimizar_cliente('a5000000-0000-0000-0000-000000000001') $$,
   'P0001', 'cliente_desconocido', 'el jefe de B no anonimiza un cliente de A');
+select throws_ok($$ select public.editar_gestion_producto('a2000000-0000-0000-0000-000000000001', 1, null, null) $$,
+  'P0001', 'producto_desconocido', 'el jefe de B no carga costos de productos de A');
+select is(public.aumentar_precios('b1000000-0000-0000-0000-000000000001', 10, 1) ->> 'cantidad', '1',
+  'el aumento de B toca sólo su producto (el de A sigue en 900, ver abajo)');
+select throws_ok($$ select public.aumentar_precios('a1000000-0000-0000-0000-000000000001', 10, 1) $$,
+  'P0001', 'dispositivo_desconocido', 'el jefe de B no aumenta precios con la PC de A');
+select throws_ok($$ select public.ajustar_stock('b1000000-0000-0000-0000-000000000001',
+    'a2000000-0000-0000-0000-000000000001', null, 1, null) $$,
+  'P0001', 'producto_desconocido', 'el jefe de B no ajusta stock de productos de A');
+select throws_ok($$ select public.fijar_limite_fiado('a5000000-0000-0000-0000-000000000001', 100) $$,
+  'P0001', 'cliente_desconocido', 'el jefe de B no fija el límite de un cliente de A');
 select results_eq($$ select nombre from public.clientes_con_telefono() $$,
   $$ values ('Cliente de B'::text) $$, 'clientes_con_telefono del jefe de B no trae clientes de A');
 select is(public.cambiar_modulo_fiado(true) ->> 'activo', 'true', 'el jefe de B prende el fiado de B (A sigue apagado, ver abajo)');

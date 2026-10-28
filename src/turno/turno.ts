@@ -14,11 +14,26 @@ export interface TurnoAbierto {
   apertura: string
 }
 
+/** Sólo con el módulo movimientos_caja (spec 2026-10-27). */
+export interface ArqueoTurno {
+  monto_inicial: number | null
+  ingresos: number
+  retiros: number
+  gastos: number
+  pagos_proveedor: number
+  efectivo_esperado: number
+  /** null si se cerró sin contar. */
+  efectivo_contado: number | null
+  /** Contado − esperado: negativo = falta plata. null si se cerró sin contar. */
+  diferencia: number | null
+}
+
 export interface CierreTurno {
   turnoId: string
   apertura: string
   cierre: string
   totales: TotalesTurno
+  arqueo?: ArqueoTurno
 }
 
 export async function leerTurnoAbierto(supabase: SupabaseClient, dispositivoId: string): Promise<TurnoAbierto | null> {
@@ -32,13 +47,14 @@ export async function leerTurnoAbierto(supabase: SupabaseClient, dispositivoId: 
   return data ? { turnoId: data.id as string, apertura: data.apertura as string } : null
 }
 
-type FilaCierre = { turno_id: string; apertura: string; cierre: string; totales: TotalesTurno }
+type FilaCierre = { turno_id: string; apertura: string; cierre: string; totales: TotalesTurno; arqueo?: ArqueoTurno }
 
 const aCierre = (r: FilaCierre): CierreTurno => ({
   turnoId: r.turno_id,
   apertura: r.apertura,
   cierre: r.cierre,
   totales: r.totales,
+  ...(r.arqueo && { arqueo: r.arqueo }),
 })
 
 export interface AperturaTurno extends TurnoAbierto {
@@ -53,8 +69,12 @@ export async function abrirTurno(supabase: SupabaseClient, dispositivoId: string
   return { turnoId: r.turno_id, apertura: r.apertura, turnoCerrado: r.turno_cerrado ? aCierre(r.turno_cerrado) : null }
 }
 
-export async function cerrarTurno(supabase: SupabaseClient, dispositivoId: string): Promise<CierreTurno> {
-  const { data, error } = await supabase.rpc('cerrar_turno', { p_dispositivo_id: dispositivoId })
+/** efectivoContado sólo con el módulo movimientos_caja: la base guarda el arqueo. */
+export async function cerrarTurno(supabase: SupabaseClient, dispositivoId: string, efectivoContado?: number): Promise<CierreTurno> {
+  const { data, error } = await supabase.rpc('cerrar_turno', {
+    p_dispositivo_id: dispositivoId,
+    ...(efectivoContado !== undefined && { p_efectivo_contado: efectivoContado }),
+  })
   if (error) throw error
   return aCierre(data as FilaCierre)
 }

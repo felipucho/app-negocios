@@ -46,6 +46,15 @@ export interface VentaConfirmada {
   yaExistia: boolean
   /** Sólo en un reintento: ya estaba grabada y después la anularon. No es un cobro y el vuelto es 0. */
   anulada: boolean
+  /** Módulo stock: productos de la venta que quedaron en o bajo su mínimo. Ausente si no hay ninguno. */
+  stockBajo?: StockBajo[]
+}
+
+export interface StockBajo {
+  productoId: string
+  nombre: string
+  cantidad: number
+  minimo: number
 }
 
 export interface DiferenciaPrecio {
@@ -72,7 +81,11 @@ export interface RespuestaRpc {
 export type LlamarRpc = (funcion: 'confirmar_venta', args: Record<string, unknown>) => PromiseLike<RespuestaRpc>
 
 type Respuesta =
-  | { estado: 'confirmada'; venta_id: string; prefijo: string; numero: number; total: number; fecha: string; vuelto: number; ya_existia: boolean; anulada: boolean }
+  | {
+      estado: 'confirmada'; venta_id: string; prefijo: string; numero: number; total: number; fecha: string; vuelto: number
+      ya_existia: boolean; anulada: boolean
+      stock_bajo?: { producto_id: string; nombre: string; cantidad: number; minimo: number }[]
+    }
   | { estado: 'precios_distintos'; diferencias: { producto_id: string; nombre: string; precio_visto: number; precio_actual: number }[] }
 
 export function argumentosConfirmar(ventaId: string, p: PedidoVenta): Record<string, unknown> {
@@ -136,6 +149,9 @@ export async function confirmarVenta(rpc: LlamarRpc, ventaId: string, pedido: Pe
       vuelto: d.vuelto,
       yaExistia: d.ya_existia,
       anulada: d.anulada,
+      ...(d.stock_bajo && {
+        stockBajo: d.stock_bajo.map((s) => ({ productoId: s.producto_id, nombre: s.nombre, cantidad: s.cantidad, minimo: s.minimo })),
+      }),
     },
   }
 }

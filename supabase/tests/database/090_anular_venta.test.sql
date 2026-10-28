@@ -156,11 +156,15 @@ select ok((
   select bool_and(pg_get_functiondef(f) ~ 'from public\.dispositivos d\s+where d\.id = p_dispositivo_id and d\.negocio_id = v_negocio\s+for update')
   from unnest(array[
     'public.anular_venta(uuid, uuid, text)'::regprocedure,
-    'public.cerrar_turno(uuid)'::regprocedure,
+    'public.cerrar_turno(uuid, integer)'::regprocedure,
     'public.abrir_turno(uuid)'::regprocedure,
-    'public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)'::regprocedure
+    'public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)'::regprocedure,
+    -- Módulos de 2026-10-27: también entran en el turno.
+    'public.cobrar_fiado(uuid, uuid, uuid, text, integer)'::regprocedure,
+    'public.registrar_movimiento_caja(uuid, uuid, text, integer, text)'::regprocedure,
+    'public.fijar_monto_inicial(uuid, integer)'::regprocedure
   ]) f
-), 'anular_venta, cerrar_turno, abrir_turno y confirmar_venta bloquean la PC (for update)');
+), 'anular_venta, cerrar_turno, abrir_turno, confirmar_venta y los que entran en el turno bloquean la PC (for update)');
 
 select * from finish();
 rollback;
