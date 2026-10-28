@@ -3,6 +3,7 @@ import { SIN_CUENTA, type Cuenta } from './auth/cuenta'
 import { Login } from './auth/Login'
 import { useSesion } from './auth/useSesion'
 import { Kiosco } from './Kiosco'
+import { PantallaOperador } from './operador/PantallaOperador'
 import type { Servicios } from './servicios'
 
 /** Raíz: sin sesión, Login; con sesión, el kiosco de la cuenta. */
@@ -21,7 +22,12 @@ export function App({ servicios }: { servicios: Servicios }) {
   )
 }
 
-type EstadoCuenta = { tipo: 'cargando' } | { tipo: 'error' } | { tipo: 'sin_cuenta' } | { tipo: 'lista'; cuenta: Cuenta }
+type EstadoCuenta =
+  | { tipo: 'cargando' }
+  | { tipo: 'error' }
+  | { tipo: 'sin_cuenta' }
+  | { tipo: 'operador' }
+  | { tipo: 'lista'; cuenta: Cuenta }
 
 interface PropsSesionAbierta {
   servicios: Servicios
@@ -34,6 +40,15 @@ function SesionAbierta({ servicios, usuarioId, alCerrarSesion }: PropsSesionAbie
 
   function cargar() {
     setEstado({ tipo: 'cargando' })
+    // La cuenta de operador no tiene kiosco: se reconoce antes de buscar una cuenta de kiosco.
+    servicios.operador.esOperador().then(
+      (esOperador) => (esOperador ? setEstado({ tipo: 'operador' }) : cargarCuenta()),
+      // Si el chequeo falla, sigue como kiosco: no bloquea a caja ni jefe.
+      () => cargarCuenta(),
+    )
+  }
+
+  function cargarCuenta() {
     servicios.leerCuenta(usuarioId).then(
       (cuenta) => setEstado(cuenta ? { tipo: 'lista', cuenta } : { tipo: 'sin_cuenta' }),
       () => setEstado({ tipo: 'error' }),
@@ -43,6 +58,9 @@ function SesionAbierta({ servicios, usuarioId, alCerrarSesion }: PropsSesionAbie
   useEffect(cargar, [servicios, usuarioId])
 
   if (estado.tipo === 'cargando') return <p className="cargando">Cargando…</p>
+  if (estado.tipo === 'operador') {
+    return <PantallaOperador servicio={servicios.operador} alCerrarSesion={alCerrarSesion} />
+  }
   if (estado.tipo !== 'lista') {
     return (
       <main className="sin-kiosco">

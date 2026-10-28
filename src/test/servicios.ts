@@ -6,6 +6,7 @@ import type { FilaRanking } from '../caja/ranking'
 import type { CursorHistorial, FilaHistorial } from '../jefe/jefe'
 import type { ClaveModulo, Modulo } from '../modulos/modulos'
 import type { ConfigNegocio, EstadoAbono } from '../negocio/config'
+import type { AltaKiosco, EntradaHistorial, FichaKiosco, KioscoResumen, ModuloDeKiosco } from '../operador/operador'
 import type { MedioCobroFiado, SaldoFiado, ServicioFiado } from '../fiado/fiado'
 import type { GestionProducto, ServicioPrecios } from '../precios/precios'
 import type { Faltante, ServicioStock, StockProducto } from '../stock/stock'
@@ -177,6 +178,38 @@ export function serviciosFalsos(
         listarDelTurno: vi.fn(async (): Promise<MovimientoDelTurno[]> => []),
       }),
     ),
+    operador: {
+      esOperador: vi.fn(async (): Promise<boolean> => false),
+      resumenKioscos: vi.fn(async (): Promise<KioscoResumen[]> => []),
+      ficha: vi.fn(
+        async (): Promise<FichaKiosco> => ({
+          datos: {
+            nombreVisible: 'Kiosco',
+            logoUrl: null,
+            colorPrimario: '#1f4e79',
+            clienteDesde: '2026-01-01',
+            esDemo: false,
+            etiquetas: [],
+            contactoNombre: null,
+            contactoTelefono: null,
+            contactoDireccion: null,
+          },
+          pcs: [],
+          notas: [],
+          recordatorios: [],
+        }),
+      ),
+      guardarDatos: vi.fn(async () => undefined),
+      subirLogo: vi.fn(async (): Promise<string> => 'https://ejemplo.test/storage/v1/object/public/logos/logo.png'),
+      modulosDeKiosco: vi.fn(async (): Promise<ModuloDeKiosco[]> => []),
+      cambiarModulo: vi.fn(async () => undefined),
+      altaKiosco: vi.fn(async (): Promise<AltaKiosco> => ({ negocioId: 'n-nuevo', cuentas: [] })),
+      agregarNota: vi.fn(async () => undefined),
+      borrarNota: vi.fn(async () => undefined),
+      agregarRecordatorio: vi.fn(async () => undefined),
+      completarRecordatorio: vi.fn(async () => undefined),
+      historial: vi.fn(async (): Promise<EntradaHistorial[]> => []),
+    },
     leerConfig: vi.fn(async (): Promise<ConfigNegocio | null> => opciones.config ?? null),
     leerEstadoAbono: vi.fn(async (): Promise<EstadoAbono | null> =>
       opciones.estadoAbono !== undefined ? opciones.estadoAbono : 'activo',

@@ -1,20 +1,24 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(59);
+-- Excepto las de operador: chequean exigir_operador() en vez del negocio del token, y su aislamiento está en 230 y 240.
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
 select is_empty($$
   select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
-    and exists (select 1 from unnest(coalesce(p.proargnames, '{}'::text[])) a where a ilike '%negocio%') $$,
+    and exists (select 1 from unnest(coalesce(p.proargnames, '{}'::text[])) a where a ilike '%negocio%')
+    and p.proname not in ('agregar_nota', 'agregar_recordatorio', 'borrar_nota', 'cambiar_modulo_kiosco', 'cerrar_alta_kiosco', 'completar_recordatorio', 'crear_kiosco', 'datos_del_kiosco', 'es_operador', 'exigir_operador', 'ficha_kiosco', 'guardar_datos_kiosco', 'listar_historial_operador', 'mfa_pendiente', 'modulos_de_kiosco', 'resumen_kioscos', 'vincular_cuenta') $$,
   'ninguna función security definer recibe el negocio por parámetro');
 select is_empty($$
   select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.prosecdef and p.prosrc !~ '(negocio_actual|rol_actual)\(\)' $$,
+  where n.nspname = 'public' and p.prosecdef and p.prosrc !~ '(negocio_actual|rol_actual)\(\)'
+    and p.proname not in ('agregar_nota', 'agregar_recordatorio', 'borrar_nota', 'cambiar_modulo_kiosco', 'cerrar_alta_kiosco', 'completar_recordatorio', 'crear_kiosco', 'datos_del_kiosco', 'es_operador', 'exigir_operador', 'ficha_kiosco', 'guardar_datos_kiosco', 'listar_historial_operador', 'mfa_pendiente', 'modulos_de_kiosco', 'resumen_kioscos', 'vincular_cuenta') $$,
   'toda función security definer toma el negocio del token (negocio_actual o rol_actual)');
 -- Las dos de arriba miran el texto, no el comportamiento: cada función nueva suma su nombre acá y su caso de B contra A abajo.
 select set_eq(
-  $$ select p.proname::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef $$,
+  $$ select p.proname::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef
+     and p.proname not in ('agregar_nota', 'agregar_recordatorio', 'borrar_nota', 'cambiar_modulo_kiosco', 'cerrar_alta_kiosco', 'completar_recordatorio', 'crear_kiosco', 'datos_del_kiosco', 'es_operador', 'exigir_operador', 'ficha_kiosco', 'guardar_datos_kiosco', 'listar_historial_operador', 'mfa_pendiente', 'modulos_de_kiosco', 'resumen_kioscos', 'vincular_cuenta') $$,
   $$ values ('abrir_turno'), ('alta_cliente'), ('alta_producto_caja'), ('anonimizar_cliente'), ('anular_venta'),
             ('caja_del_dia'), ('cambiar_modulo_fiado'), ('cerrar_turno'), ('clientes_con_telefono'), ('confirmar_venta'), ('editar_producto'),
             ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ultimo_turno_cerrado'), ('ventas_del_dia'),

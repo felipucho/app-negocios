@@ -8,7 +8,8 @@ select tables_are(
   array['negocios', 'cuentas', 'config_negocio', 'modulos', 'modulos_negocio', 'dispositivos',
         'productos', 'clientes', 'turnos', 'ventas', 'lineas_venta', 'pagos_venta',
         'anulaciones', 'historial', 'version_app', 'productos_gestion', 'pagos_fiado', 'movimientos_caja',
-        'stock_productos', 'movimientos_stock', 'aumentos_precios'],
+        'stock_productos', 'movimientos_stock', 'aumentos_precios',
+        'operadores', 'ficha_kiosco', 'notas_operador', 'recordatorios_operador', 'historial_operador'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 

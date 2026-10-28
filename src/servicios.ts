@@ -12,6 +12,7 @@ import { crearServicioFiado, type ServicioFiado } from './fiado/fiado'
 import { crearServicioJefe, type ServicioJefe } from './jefe/jefe'
 import { leerModulos, type Modulo } from './modulos/modulos'
 import { leerConfigNegocio, leerEstadoAbonoNegocio, type ConfigNegocio, type EstadoAbono } from './negocio/config'
+import { crearServicioOperador, type ServicioOperador } from './operador/operador'
 import { crearServicioClientes, type ServicioClientes } from './pagos/clientes'
 import { crearServicioPrecios, type ServicioPrecios } from './precios/precios'
 import { crearServicioProductos, type ServicioProductos } from './productos/productos'
@@ -48,6 +49,8 @@ export interface Servicios {
   stock(dispositivoId: string): ServicioStock
   movimientos(dispositivoId: string): ServicioMovimientosCaja
   jefe: ServicioJefe
+  /** Sólo la cuenta de operador (administra kioscos y módulos). Chequeado en la base. */
+  operador: ServicioOperador
   leerConfig(): Promise<ConfigNegocio | null>
   leerEstadoAbono(): Promise<EstadoAbono | null>
 }
@@ -113,6 +116,7 @@ export function crearServicios(supabase: SupabaseClient, db: CacheCatalogo, clav
     stock: (id) => crearServicioStock(supabase, id),
     movimientos: (id) => crearServicioMovimientosCaja(supabase, id),
     jefe: crearServicioJefe(supabase),
+    operador: crearServicioOperador(supabase),
     // Logos sólo del Supabase del proyecto: es el único origen de imágenes que deja la CSP (tarea 19).
     leerConfig: () => leerConfigNegocio(supabase, import.meta.env.VITE_SUPABASE_URL),
     leerEstadoAbono: () => leerEstadoAbonoNegocio(supabase),
