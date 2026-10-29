@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FECHA_HORA } from '../lib/fecha'
 import { formatearPesos } from '../lib/plata'
+import type { ClaveModulo } from '../modulos/modulos'
 import {
   PAGINA_HISTORIAL,
   type CursorHistorial,
@@ -17,6 +18,19 @@ const TITULO: Record<TipoHistorial, string> = {
   anulacion: 'Anulación',
   apertura_turno: 'Apertura de turno',
   cierre_turno: 'Cierre de turno',
+  cambio_modulo: 'Cambio de módulo',
+  cambio_plan: 'Cambio de plan',
+  excepcion_modulo: 'Extra o quita de módulo',
+  cambio_limite_fiado: 'Cambio de límite de fiado',
+}
+
+const MODULO: Record<ClaveModulo, string> = {
+  fiado: 'Fiado',
+  precios: 'Precios',
+  movimientos_caja: 'Movimientos de caja',
+  stock: 'Stock',
+  varios: 'Varios',
+  proveedores: 'Proveedores',
 }
 
 const QUIEN: Record<QuienHistorial, string> = {
@@ -27,6 +41,11 @@ const QUIEN: Record<QuienHistorial, string> = {
 
 const pesos = (v: unknown) => (typeof v === 'number' ? formatearPesos(v) : '—')
 const texto = (v: unknown) => (v === null || v === undefined ? 'sin código' : String(v))
+const modulo = (v: Record<string, unknown>) => MODULO[v.modulo as ClaveModulo] ?? String(v.modulo)
+const limite = (v: unknown) => (typeof v === 'number' ? formatearPesos(v) : 'Sin límite')
+// permite: true agrega el módulo, false lo quita, null borra la excepción y el derecho vuelve al plan.
+const extra = (permite: unknown) =>
+  permite === true ? 'agregado como extra' : permite === false ? 'quitado de tu plan' : 'vuelve a lo que dice tu plan'
 
 function cambiosDeProducto(antes: Record<string, unknown>, despues: Record<string, unknown>): string {
   const partes: string[] = []
@@ -54,6 +73,16 @@ export function describirFila(f: FilaHistorial): string {
       return 'Turno abierto'
     case 'cierre_turno':
       return despues.automatico === true ? 'Cerrado solo al abrir otro turno' : 'Turno cerrado'
+    case 'cambio_modulo':
+      return `${modulo(despues)}: ${despues.activo === true ? 'prendido' : 'apagado'}`
+    case 'cambio_plan': {
+      const plan = String(despues.plan)
+      return typeof antes.plan === 'string' ? `Plan ${antes.plan} → ${plan}` : `Plan ${plan}`
+    }
+    case 'excepcion_modulo':
+      return `${modulo(despues)}: ${extra(despues.permite)}`
+    case 'cambio_limite_fiado':
+      return `Un cliente: ${limite(antes.limite_fiado)} → ${limite(despues.limite_fiado)}`
   }
 }
 

@@ -7,7 +7,7 @@ import type { Dispositivo } from './dispositivo/dispositivo'
 import { Calibracion } from './escaner/Calibracion'
 import { PantallaFiado } from './fiado/PantallaFiado'
 import { AnonimizarCliente } from './jefe/AnonimizarCliente'
-import { ModuloFiado } from './jefe/ModuloFiado'
+import { Modulos } from './jefe/Modulos'
 import { PantallaHistorial } from './jefe/PantallaHistorial'
 import { codigoDeError } from './lib/errores'
 import { parsearPesos } from './lib/plata'
@@ -17,6 +17,7 @@ import { aplicarConfig, type ConfigNegocio, type EstadoAbono } from './negocio/c
 import { PantallaPagos } from './pagos/PantallaPagos'
 import { PantallaPrecios } from './precios/PantallaPrecios'
 import { PantallaProductos } from './productos/PantallaProductos'
+import { PantallaProveedores } from './proveedores/PantallaProveedores'
 import type { Servicios } from './servicios'
 import { PantallaStock } from './stock/PantallaStock'
 import type { Rol } from './tipos'
@@ -30,6 +31,7 @@ export type Seccion =
   | 'caja_del_dia'
   | 'movimientos'
   | 'stock'
+  | 'proveedores'
   | 'fiado'
   | 'precios'
   | 'historial'
@@ -44,10 +46,11 @@ export const SECCIONES: readonly { id: Seccion; titulo: string; soloJefe: boolea
   { id: 'caja_del_dia', titulo: 'Caja del día', soloJefe: false },
   { id: 'movimientos', titulo: 'Movimientos de caja', soloJefe: false, modulo: 'movimientos_caja' },
   { id: 'stock', titulo: 'Stock', soloJefe: false, modulo: 'stock' },
+  { id: 'proveedores', titulo: 'Proveedores', soloJefe: false, modulo: 'proveedores' },
   { id: 'fiado', titulo: 'Fiado', soloJefe: false },
   { id: 'precios', titulo: 'Precios', soloJefe: true, modulo: 'precios' },
   { id: 'historial', titulo: 'Historial', soloJefe: true },
-  { id: 'modulo', titulo: 'Módulo fiado', soloJefe: true },
+  { id: 'modulo', titulo: 'Módulos', soloJefe: true },
   { id: 'anonimizar', titulo: 'Anonimizar cliente', soloJefe: true },
   { id: 'calibracion', titulo: 'Calibrar escáner', soloJefe: true },
 ]
@@ -84,8 +87,8 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
   // null: todavía no se pudo leer. El medio fiado de la pantalla de cobro sigue el mismo valor.
   const fiado = modulos === null ? null : activo('fiado')
 
-  function alCambiarFiado(nuevo: boolean) {
-    setModulos((ms) => ms && ms.map((m) => (m.clave === 'fiado' ? { ...m, activo: nuevo } : m)))
+  function alCambiarModulo(clave: string, nuevo: boolean) {
+    setModulos((ms) => ms && ms.map((m) => (m.clave === clave ? { ...m, activo: nuevo } : m)))
   }
 
   function registrar() {
@@ -125,6 +128,7 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
             fiado: servicios.fiado(dispositivo.dispositivoId),
             stock: servicios.stock(dispositivo.dispositivoId),
             movimientos: servicios.movimientos(dispositivo.dispositivoId),
+            proveedores: servicios.proveedores(dispositivo.dispositivoId),
           }
         : null,
     [servicios, dispositivo],
@@ -180,6 +184,10 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
 
   const dispositivoId = dispositivo.dispositivoId
   const esJefe = cuenta.rol === 'jefe'
+  // Si la relectura apaga el módulo de la sección abierta, no se dibuja nada y la caja sigue oculta: se vuelve a la caja.
+  const abierta = seccionesPara(cuenta.rol, activos).some((s) => s.id === seccion) ? seccion : 'caja'
+  // En el render y no en un effect: hay return temprano arriba.
+  if (abierta !== seccion) setSeccion(abierta)
 
   return (
     <div className="kiosco">
@@ -194,7 +202,7 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
             <button
               key={s.id}
               type="button"
-              aria-pressed={seccion === s.id}
+              aria-pressed={abierta === s.id}
               // Como los botones de la caja: el clic no le saca el foco al campo de escaneo (decisión 13).
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setSeccion(s.id)}
@@ -258,14 +266,14 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
       )}
 
       {/* Siempre montada: cambiar de sección no pierde la venta en armado. */}
-      <div hidden={seccion !== 'caja' || cierre !== null}>
+      <div hidden={abierta !== 'caja' || cierre !== null}>
         <PantallaCaja
           key={vueltaCaja}
           catalogo={servicios.catalogo}
           turno={porPc.turno}
           leerRanking={servicios.leerRanking}
           productos={porPc.productos}
-          activa={seccion === 'caja' && cierre === null && !confirmarCierre}
+          activa={abierta === 'caja' && cierre === null && !confirmarCierre}
           varios={activo('varios')}
           cobro={(sesion) => (
             <PantallaPagos
@@ -282,14 +290,17 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
         />
       </div>
 
-      {seccion === 'productos' && <PantallaProductos servicio={porPc.productos} />}
-      {seccion === 'caja_del_dia' && <CajaDelDia rol={cuenta.rol} servicio={porPc.cajaDelDia} />}
-      {seccion === 'movimientos' && activo('movimientos_caja') && (
+      {abierta === 'productos' && <PantallaProductos servicio={porPc.productos} />}
+      {abierta === 'caja_del_dia' && <CajaDelDia rol={cuenta.rol} servicio={porPc.cajaDelDia} />}
+      {abierta === 'movimientos' && activo('movimientos_caja') && (
         <PantallaMovimientos servicio={porPc.movimientos} turno={porPc.turno} />
       )}
-      {seccion === 'stock' && activo('stock') && <PantallaStock servicio={porPc.stock} productos={porPc.productos} esJefe={esJefe} />}
-      {seccion === 'fiado' && <PantallaFiado servicio={porPc.fiado} esJefe={esJefe} fiadoActivo={fiado} />}
-      {esJefe && seccion === 'precios' && activo('precios') && (
+      {abierta === 'stock' && activo('stock') && <PantallaStock servicio={porPc.stock} productos={porPc.productos} esJefe={esJefe} />}
+      {abierta === 'proveedores' && activo('proveedores') && (
+        <PantallaProveedores servicio={porPc.proveedores} retirosActivos={activo('movimientos_caja')} stockActivo={activo('stock')} />
+      )}
+      {abierta === 'fiado' && <PantallaFiado servicio={porPc.fiado} esJefe={esJefe} fiadoActivo={fiado} />}
+      {esJefe && abierta === 'precios' && activo('precios') && (
         <PantallaPrecios
           servicio={porPc.precios}
           productos={porPc.productos}
@@ -298,10 +309,10 @@ export function Kiosco({ servicios, cuenta, alCerrarSesion }: PropsKiosco) {
           }}
         />
       )}
-      {esJefe && seccion === 'historial' && <PantallaHistorial servicio={servicios.jefe} />}
-      {esJefe && seccion === 'modulo' && <ModuloFiado activo={fiado} servicio={servicios.jefe} alCambiar={alCambiarFiado} />}
-      {esJefe && seccion === 'anonimizar' && <AnonimizarCliente clientes={servicios.clientes} servicio={servicios.jefe} />}
-      {esJefe && seccion === 'calibracion' && <Calibracion />}
+      {esJefe && abierta === 'historial' && <PantallaHistorial servicio={servicios.jefe} />}
+      {esJefe && abierta === 'modulo' && <Modulos servicio={servicios.jefe} alCambiar={alCambiarModulo} />}
+      {esJefe && abierta === 'anonimizar' && <AnonimizarCliente clientes={servicios.clientes} servicio={servicios.jefe} />}
+      {esJefe && abierta === 'calibracion' && <Calibracion />}
     </div>
   )
 }

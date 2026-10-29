@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { codigoDeError } from '../lib/errores'
 import type { Cliente } from '../tipos'
 
+/** Falta plan_definido: es de un plan, sin kiosco (negocio_id nulo), y historial_select no se lo muestra al jefe. */
 export type TipoHistorial =
   | 'alta_producto'
   | 'cambio_precio'
@@ -9,8 +10,12 @@ export type TipoHistorial =
   | 'anulacion'
   | 'apertura_turno'
   | 'cierre_turno'
+  | 'cambio_modulo'
+  | 'cambio_plan'
+  | 'excepcion_modulo'
+  | 'cambio_limite_fiado'
 
-export type EntidadHistorial = 'productos' | 'ventas' | 'turnos'
+export type EntidadHistorial = 'productos' | 'ventas' | 'turnos' | 'negocios' | 'clientes'
 
 /** Quién hizo el cambio: el kiosco tiene una cuenta por rol; vacío = Supabase Studio. */
 export type QuienHistorial = 'caja' | 'jefe' | 'fuera_de_la_app'
@@ -53,9 +58,26 @@ export interface CursorHistorial {
   id: string
 }
 
+/** Lo que devuelve mis_modulos para este kiosco: el plan, las excepciones y lo que falta para prender cada módulo. */
+export interface ModuloJefe {
+  clave: string
+  descripcion: string
+  enPlan: boolean
+  excepcion: 'agregado' | 'quitado' | null
+  derecho: boolean
+  uso: boolean
+  activo: boolean
+  faltan: string[]
+}
+
+type FilaModuloJefe = Omit<ModuloJefe, 'enPlan'> & { en_plan: boolean }
+
 export interface ServicioJefe {
-  /** cambiar_modulo_fiado (tarea 16). Devuelve el estado que quedó. */
+  /** cambiar_modulo para 'fiado'. Devuelve el estado que quedó. */
   cambiarModuloFiado(activo: boolean): Promise<boolean>
+  /** cambiar_modulo. Devuelve el estado que quedó. */
+  cambiarModulo(clave: string, activo: boolean): Promise<boolean>
+  modulos(): Promise<ModuloJefe[]>
   /** anonimizar_cliente (tarea 16). Irreversible. */
   anonimizarCliente(clienteId: string): Promise<Cliente>
   /** De a PAGINA_HISTORIAL filas, más nuevas primero: sin cursor, la primera página; con cursor, las que siguen. */
@@ -67,6 +89,11 @@ const MENSAJES_JEFE: Record<string, string> = {
   sin_cuenta: 'Esta cuenta no está vinculada a este kiosco.',
   cliente_desconocido: 'Ese cliente no existe en este kiosco.',
   pedido_invalido: 'El pedido no es válido.',
+  modulo_desconocido: 'Ese módulo no existe.',
+  sin_derecho: 'Ese módulo no está en tu plan.',
+  dependencia_inactiva: 'Antes prendé los módulos de los que depende.',
+  dependencia_sin_derecho: 'Ese módulo necesita otros que no están en tu plan.',
+  modulo_requerido: 'Antes apagá los módulos que lo necesitan.',
 }
 
 export function mensajeJefe(e: unknown): string {
@@ -95,11 +122,31 @@ export function aFilaHistorial(
 }
 
 export function crearServicioJefe(supabase: SupabaseClient): ServicioJefe {
+  const cambiarModulo = async (clave: string, activo: boolean): Promise<boolean> => {
+    const { data, error } = await supabase.rpc('cambiar_modulo', {
+      p_modulo: clave,
+      p_activo: activo,
+      p_op_id: crypto.randomUUID(),
+    })
+    if (error) throw error
+    return (data as { activo: boolean }).activo
+  }
   return {
-    async cambiarModuloFiado(activo) {
-      const { data, error } = await supabase.rpc('cambiar_modulo_fiado', { p_activo: activo })
+    cambiarModuloFiado: (activo) => cambiarModulo('fiado', activo),
+    cambiarModulo,
+    async modulos() {
+      const { data, error } = await supabase.rpc('mis_modulos')
       if (error) throw error
-      return (data as { activo: boolean }).activo
+      return (data as FilaModuloJefe[]).map((f) => ({
+        clave: f.clave,
+        descripcion: f.descripcion,
+        enPlan: f.en_plan,
+        excepcion: f.excepcion,
+        derecho: f.derecho,
+        uso: f.uso,
+        activo: f.activo,
+        faltan: f.faltan,
+      }))
     },
     async anonimizarCliente(clienteId) {
       const { data, error } = await supabase.rpc('anonimizar_cliente', { p_cliente_id: clienteId })

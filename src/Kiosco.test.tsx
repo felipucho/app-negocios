@@ -245,6 +245,19 @@ describe('Kiosco', () => {
     expect(secciones()).toEqual(['Caja', 'Productos', 'Caja del día', 'Stock', 'Fiado'])
   })
 
+  it('Proveedores aparece sólo con su módulo activo, y la caja lo ve', async () => {
+    armar(CUENTA_CAJA, serviciosFalsos({ modulos: ['proveedores'] }))
+    await waitFor(() => expect(secciones()).toContain('Proveedores'))
+    expect(secciones()).toEqual(['Caja', 'Productos', 'Caja del día', 'Proveedores', 'Fiado'])
+  })
+
+  it('abre la pantalla de proveedores con la alta si todavía no hay ninguno', async () => {
+    const { servicios, user } = armar(CUENTA_CAJA, serviciosFalsos({ modulos: ['proveedores'] }))
+    await user.click(await screen.findByRole('button', { name: 'Proveedores' }))
+    expect(servicios.proveedores).toHaveBeenCalledWith('pc-1')
+    expect(await screen.findByRole('form', { name: 'Alta de proveedor' })).toBeInTheDocument()
+  })
+
   it('con la caja oculta se puede seleccionar texto con el mouse', async () => {
     const { user } = armar(CUENTA_JEFE)
     await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
