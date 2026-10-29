@@ -2,39 +2,23 @@
 // Los usuarios de Auth los crea el service role de acá; el kiosco y las cuentas van por RPC con el JWT
 // del operador, así que la base vuelve a chequear es_operador().
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { CABECERAS, SIN_SESION, claveElegida, claveNueva, claveValida, codigo, responder, texto } from '../_shared/comun.ts'
 
-const CABECERAS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
-  'content-type': 'application/json',
-  // La respuesta trae claves en claro: que ningún caché la guarde.
-  'cache-control': 'no-store',
-}
-
-const SIN_SESION = { auth: { persistSession: false, autoRefreshToken: false } }
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-function responder(estado: number, cuerpo: unknown): Response {
-  return new Response(JSON.stringify(cuerpo), { status: estado, headers: CABECERAS })
+// Auth responde 422 tanto para mail repetido como para clave débil: el código dice cuál.
+function motivoAuth(error: { status?: number; code?: string } | null): string {
+  if (error?.code === 'weak_password') return 'clave_debil'
+  return error?.status === 422 ? 'email_ocupado' : 'alta_fallida'
 }
 
-// Sólo códigos de la base o de esta función (minúsculas y guiones bajos): el resto no sale al cliente.
-function codigo(e: unknown): string {
-  const mensaje = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : ''
-  return /^[a-z_]+$/.test(mensaje) ? mensaje : 'alta_fallida'
-}
-
-function claveNueva(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(18))
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-async function crearUsuario(admin: SupabaseClient, email: string) {
-  const password = claveNueva()
+async function crearUsuario(admin: SupabaseClient, email: string, clave: string) {
+  const password = clave || claveNueva()
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true })
   const usuario = data?.user
-  if (!usuario) throw new Error(error?.status === 422 ? 'email_ocupado' : 'alta_fallida')
-  return { id: usuario.id, email, password }
+  if (!usuario) throw new Error(motivoAuth(error))
+  // Sólo vuelve la clave que generamos: la que cargó el operador no sale de esta función.
+  return { id: usuario.id, email, password: clave ? null : password }
 }
 
 async function vincular(operador: SupabaseClient, negocioId: string, usuarioId: string, rol: 'jefe' | 'caja') {
@@ -61,9 +45,24 @@ Deno.serve(async (req) => {
   const nombreVisible = typeof cuerpo?.nombreVisible === 'string' ? cuerpo.nombreVisible.trim() : ''
   const emailJefe = typeof cuerpo?.emailJefe === 'string' ? cuerpo.emailJefe.trim() : ''
   const emailCaja = typeof cuerpo?.emailCaja === 'string' ? cuerpo.emailCaja.trim() : ''
+  const colorPrimario = texto(cuerpo?.colorPrimario)
+  const clienteDesde = texto(cuerpo?.clienteDesde) || null
+  const esDemo = cuerpo?.esDemo === true
+  const etiquetas: unknown = cuerpo?.etiquetas ?? []
+  const contactoNombre = texto(cuerpo?.contactoNombre)
+  const contactoTelefono = texto(cuerpo?.contactoTelefono)
+  const contactoDireccion = texto(cuerpo?.contactoDireccion)
+  const claveJefe = claveElegida(cuerpo?.claveJefe)
+  const claveCaja = claveElegida(cuerpo?.claveCaja)
   if (!EMAIL.test(emailJefe) || !EMAIL.test(emailCaja)) return responder(400, { error: 'email_invalido' })
   if (emailJefe.toLowerCase() === emailCaja.toLowerCase()) return responder(400, { error: 'emails_iguales' })
   if (nombreVisible.length > 60) return responder(400, { error: 'nombre_visible_invalido' })
+  if (!Array.isArray(etiquetas) || !etiquetas.every((t) => typeof t === 'string')) {
+    return responder(400, { error: 'etiquetas_invalidas' })
+  }
+  if ((claveJefe !== '' && !claveValida(claveJefe)) || (claveCaja !== '' && !claveValida(claveCaja))) {
+    return responder(400, { error: 'clave_invalida' })
+  }
 
   const { data: negocioId, error: errorKiosco } = await operador.rpc('crear_kiosco', { p_nombre: nombre })
   if (errorKiosco) return responder(400, { error: codigo(errorKiosco) })
@@ -71,9 +70,9 @@ Deno.serve(async (req) => {
   const admin = createClient(url, servicio, SIN_SESION)
   const creados: string[] = []
   try {
-    const jefe = await crearUsuario(admin, emailJefe)
+    const jefe = await crearUsuario(admin, emailJefe, claveJefe)
     creados.push(jefe.id)
-    const caja = await crearUsuario(admin, emailCaja)
+    const caja = await crearUsuario(admin, emailCaja, claveCaja)
     creados.push(caja.id)
     await vincular(operador, negocioId, jefe.id, 'jefe')
     await vincular(operador, negocioId, caja.id, 'caja')
@@ -81,6 +80,13 @@ Deno.serve(async (req) => {
     const { error: errorAlta } = await operador.rpc('cerrar_alta_kiosco', {
       p_negocio: negocioId,
       p_nombre_visible: nombreVisible,
+      p_color_primario: colorPrimario,
+      p_cliente_desde: clienteDesde,
+      p_etiquetas: etiquetas,
+      p_es_demo: esDemo,
+      p_contacto_nombre: contactoNombre,
+      p_contacto_telefono: contactoTelefono,
+      p_contacto_direccion: contactoDireccion,
     })
     if (errorAlta) throw errorAlta
     return responder(200, {
