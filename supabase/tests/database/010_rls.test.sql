@@ -9,7 +9,8 @@ select tables_are(
         'productos', 'clientes', 'turnos', 'ventas', 'lineas_venta', 'pagos_venta',
         'anulaciones', 'historial', 'version_app', 'productos_gestion', 'pagos_fiado', 'movimientos_caja',
         'stock_productos', 'movimientos_stock', 'aumentos_precios',
-        'operadores', 'ficha_kiosco', 'notas_operador', 'recordatorios_operador', 'historial_operador'],
+        'proveedores', 'visitas_proveedor', 'pedidos_proveedor', 'operadores', 'ficha_kiosco', 'notas_operador',
+        'recordatorios_operador', 'historial_operador'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 
@@ -23,7 +24,7 @@ select is_empty(
 
 select results_eq(
   $$ select clave, activo_por_defecto from public.modulos order by clave $$,
-  $$ values ('fiado'::text, true), ('movimientos_caja', false), ('precios', false), ('stock', false), ('varios', false) $$,
+  $$ values ('fiado'::text, true), ('movimientos_caja', false), ('precios', false), ('proveedores', false), ('stock', false), ('varios', false) $$,
   'los módulos: fiado activo por defecto; los de 2026-10-27, apagados'
 );
 
@@ -285,7 +286,7 @@ select results_eq(
 
 select results_eq(
   $$ select clave from public.modulos order by clave $$,
-  $$ values ('fiado'::text), ('movimientos_caja'), ('precios'), ('stock'), ('varios') $$,
+  $$ values ('fiado'::text), ('movimientos_caja'), ('precios'), ('proveedores'), ('stock'), ('varios') $$,
   'authenticated ve el catálogo de módulos'
 );
 

@@ -1,9 +1,9 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(59);
--- Excepto las de operador: chequean exigir_operador() en vez del negocio del token, y su aislamiento está en 230 y 240.
+select plan(70);
 
 -- 1 a 3: genéricas sobre TODAS las funciones security definer de public (también las de las tareas 11 a 17).
+-- Excepto las de operador: chequean exigir_operador() en vez del negocio del token, y su aislamiento está en 230 y 240.
 select is_empty($$
   select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
@@ -23,7 +23,9 @@ select set_eq(
             ('caja_del_dia'), ('cambiar_modulo_fiado'), ('cerrar_turno'), ('clientes_con_telefono'), ('confirmar_venta'), ('editar_producto'),
             ('ranking_sin_codigo'), ('registrar_dispositivo'), ('ultimo_turno_cerrado'), ('ventas_del_dia'),
             ('ajustar_stock'), ('aumentar_precios'), ('cobrar_fiado'), ('editar_gestion_producto'), ('fijar_limite_fiado'),
-            ('fijar_monto_inicial'), ('ingresar_stock'), ('registrar_movimiento_caja'), ('saldos_fiado') $$,
+            ('fijar_monto_inicial'), ('ingresar_stock'), ('registrar_movimiento_caja'), ('saldos_fiado'),
+            ('agregar_faltantes_al_pedido'), ('agregar_pedido_proveedor'), ('guardar_proveedor'), ('marcar_pedido_proveedor'),
+            ('marcar_visita_proveedor'), ('quitar_pedido_proveedor'), ('quitar_visita_proveedor'), ('registrar_visita_proveedor') $$,
   'cada función security definer de public tiene su caso de aislamiento en este archivo');
 
 insert into auth.users (id, email) values
@@ -54,11 +56,19 @@ insert into public.modulos_negocio (negocio_id, modulo, activo) values
   ('b0000000-0000-0000-0000-000000000000', 'precios', true),
   ('b0000000-0000-0000-0000-000000000000', 'movimientos_caja', true),
   ('b0000000-0000-0000-0000-000000000000', 'stock', true),
-  ('b0000000-0000-0000-0000-000000000000', 'varios', true);
+  ('b0000000-0000-0000-0000-000000000000', 'varios', true),
+  ('b0000000-0000-0000-0000-000000000000', 'proveedores', true);
 -- Un aumento ya aplicado en A, para probar que B no lo ve.
 insert into public.aumentos_precios (id, negocio_id, cuenta_id, dispositivo_id, porcentaje, redondeo, cantidad) values
   ('e0000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-00000000000a',
    'a1000000-0000-0000-0000-000000000001', 10, 1, 1);
+-- Proveedores de A (2026-10-28): B no los ve ni los toca.
+insert into public.proveedores (id, negocio_id, nombre) values
+  ('a7000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'Proveedor de A');
+insert into public.visitas_proveedor (id, negocio_id, proveedor_id, fecha) values
+  ('a8000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a7000000-0000-0000-0000-000000000001', '2026-11-01');
+insert into public.pedidos_proveedor (id, negocio_id, proveedor_id, descripcion) values
+  ('a9000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000000', 'a7000000-0000-0000-0000-000000000001', 'Pedido de A');
 
 -- 4: A vende
 set local role authenticated;
@@ -133,6 +143,29 @@ select throws_ok($$ select public.cobrar_fiado(gen_random_uuid(), 'b1000000-0000
   'P0001', 'cliente_desconocido', 'B no cobra deuda a un cliente de A');
 select results_eq($$ select nombre from public.saldos_fiado() $$,
   $$ values ('Cliente de B'::text) $$, 'saldos_fiado de B no trae clientes de A');
+
+-- Proveedores (2026-10-28): B no ve los de A ni los toca.
+select is((select count(*)::int from public.proveedores), 0, 'B no ve proveedores de A');
+select is((select count(*)::int from public.visitas_proveedor), 0, 'B no ve visitas de A');
+select is((select count(*)::int from public.pedidos_proveedor), 0, 'B no ve pedidos de A');
+select throws_ok($$ select public.guardar_proveedor('a7000000-0000-0000-0000-000000000001', 'Robado') $$,
+  'P0001', 'proveedor_desconocido', 'B no edita la ficha de un proveedor de A');
+select throws_ok($$ select public.registrar_visita_proveedor('b8000000-0000-0000-0000-000000000001',
+    'a7000000-0000-0000-0000-000000000001', '2026-11-02', null) $$,
+  'P0001', 'proveedor_desconocido', 'B no anota visitas a un proveedor de A');
+select throws_ok($$ select public.marcar_visita_proveedor('a8000000-0000-0000-0000-000000000001', 'llego') $$,
+  'P0001', 'visita_desconocida', 'B no marca la visita de A');
+select throws_ok($$ select public.quitar_visita_proveedor('a8000000-0000-0000-0000-000000000001') $$,
+  'P0001', 'visita_desconocida', 'B no quita la visita de A');
+select throws_ok($$ select public.agregar_pedido_proveedor('b9000000-0000-0000-0000-000000000001',
+    'a7000000-0000-0000-0000-000000000001', 'Intruso', null) $$,
+  'P0001', 'proveedor_desconocido', 'B no pide mercadería a un proveedor de A');
+select throws_ok($$ select public.marcar_pedido_proveedor('a9000000-0000-0000-0000-000000000001', true) $$,
+  'P0001', 'pedido_desconocido', 'B no marca el pedido de A');
+select throws_ok($$ select public.quitar_pedido_proveedor('a9000000-0000-0000-0000-000000000001') $$,
+  'P0001', 'pedido_desconocido', 'B no quita el pedido de A');
+select throws_ok($$ select public.agregar_faltantes_al_pedido('a7000000-0000-0000-0000-000000000001') $$,
+  'P0001', 'proveedor_desconocido', 'B no suma faltantes a un proveedor de A');
 
 -- 28 a 39: el jefe de B
 select set_config('request.jwt.claims',

@@ -33,6 +33,9 @@ select set_eq($$
         -- Módulos de 2026-10-27.
         'ajustar_stock', 'aumentar_precios', 'cobrar_fiado', 'editar_gestion_producto', 'fijar_limite_fiado',
         'fijar_monto_inicial', 'ingresar_stock', 'registrar_movimiento_caja', 'saldos_fiado',
+        -- Proveedores (2026-10-28).
+        'agregar_faltantes_al_pedido', 'agregar_pedido_proveedor', 'guardar_proveedor', 'marcar_pedido_proveedor',
+        'marcar_visita_proveedor', 'quitar_pedido_proveedor', 'quitar_visita_proveedor', 'registrar_visita_proveedor',
         -- Operador (2026-10-28 y panel fase 1): cada una valida exigir_operador() en la base.
         'agregar_nota', 'agregar_recordatorio', 'borrar_nota', 'cambiar_modulo_kiosco', 'cerrar_alta_kiosco',
         'completar_recordatorio', 'crear_kiosco', 'es_operador', 'ficha_kiosco', 'guardar_datos_kiosco',
