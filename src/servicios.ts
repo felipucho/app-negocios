@@ -16,6 +16,7 @@ import { crearServicioOperador, type ServicioOperador } from './operador/operado
 import { crearServicioClientes, type ServicioClientes } from './pagos/clientes'
 import { crearServicioPrecios, type ServicioPrecios } from './precios/precios'
 import { crearServicioProductos, type ServicioProductos } from './productos/productos'
+import { crearServicioProveedores, type ServicioProveedores } from './proveedores/proveedores'
 import { crearServicioStock, type ServicioStock } from './stock/stock'
 import { abrirTurno, cerrarTurno, leerTurnoAbierto, leerUltimoTurnoCerrado, type CierreTurno } from './turno/turno'
 import { crearServicioMovimientosCaja, type ServicioMovimientosCaja } from './turno/movimientosCaja'
@@ -48,6 +49,7 @@ export interface Servicios {
   fiado(dispositivoId: string): ServicioFiado
   stock(dispositivoId: string): ServicioStock
   movimientos(dispositivoId: string): ServicioMovimientosCaja
+  proveedores(dispositivoId: string): ServicioProveedores
   jefe: ServicioJefe
   /** Sólo la cuenta de operador (administra kioscos y módulos). Chequeado en la base. */
   operador: ServicioOperador
@@ -115,6 +117,7 @@ export function crearServicios(supabase: SupabaseClient, db: CacheCatalogo, clav
     fiado: (id) => crearServicioFiado(supabase, id),
     stock: (id) => crearServicioStock(supabase, id),
     movimientos: (id) => crearServicioMovimientosCaja(supabase, id),
+    proveedores: (id) => crearServicioProveedores(supabase, id),
     jefe: crearServicioJefe(supabase),
     operador: crearServicioOperador(supabase),
     // Logos sólo del Supabase del proyecto: es el único origen de imágenes que deja la CSP (tarea 19).
