@@ -91,6 +91,10 @@ export function ListaKioscos({ lista, filtro }: Props) {
               <span>
                 Cliente hace {antiguedad(k.clienteDesde, hoy)} · {actividadTexto(k.ultimaVenta, hoy)}
               </span>
+              <span>
+                Plan: {k.planNombre ?? 'Sin plan'}
+                {k.extras > 0 && ` · +${k.extras} ${k.extras === 1 ? 'extra' : 'extras'}`}
+              </span>
               <span className="operador__insignias">
                 {k.esDemo && <span>Demo</span>}
                 {k.recordatoriosHoy > 0 && <span>Recordatorio hoy</span>}

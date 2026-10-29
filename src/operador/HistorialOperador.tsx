@@ -10,6 +10,13 @@ const ACCIONES: { valor: string; texto: string }[] = [
   { valor: 'alta_kiosco', texto: 'Alta del kiosco' },
   { valor: 'datos_kiosco', texto: 'Datos del kiosco' },
   { valor: 'modulo', texto: 'Módulo' },
+  { valor: 'cambio_modulo', texto: 'Módulo' },
+  { valor: 'cambio_plan', texto: 'Cambio de plan' },
+  { valor: 'plan_definido', texto: 'Plan definido' },
+  { valor: 'excepcion_modulo', texto: 'Extra o quita de módulo' },
+  { valor: 'cambio_limite_fiado', texto: 'Límite de fiado' },
+  { valor: 'restablecer_clave', texto: 'Restablecer clave' },
+  { valor: 'cerrar_sesiones', texto: 'Cerrar sesiones' },
   { valor: 'nota_agregada', texto: 'Nota agregada' },
   { valor: 'nota_borrada', texto: 'Nota borrada' },
   { valor: 'recordatorio_agregado', texto: 'Recordatorio agregado' },
@@ -113,7 +120,9 @@ export function HistorialOperador({ servicio, kioscos, negocioFijo, version }: P
         {entradas?.map((e) => (
           <li key={e.id}>
             <strong>
-              {etiquetaAccion(e.accion)} · {e.kiosco}
+              {etiquetaAccion(e.accion)}
+              {/* Los cambios de un plan no son de un kiosco: kiosco viene nulo. */}
+              {e.kiosco && ` · ${e.kiosco}`}
             </strong>
             <span>
               {fechaHora(e.fecha)} · {e.operador}

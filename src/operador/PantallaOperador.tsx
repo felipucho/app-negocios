@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AltaKiosco } from './AltaKiosco'
+import { EditorPlanes } from './EditorPlanes'
 import { FichaDelKiosco } from './FichaKiosco'
 import { HistorialOperador } from './HistorialOperador'
 import { Inicio } from './Inicio'
@@ -19,6 +20,7 @@ const SECCIONES: { hash: string; texto: string; activa(ruta: Ruta): boolean }[] 
     texto: 'Kioscos',
     activa: (r) => r.tipo === 'kioscos' || r.tipo === 'kiosco',
   },
+  { hash: aHash({ tipo: 'planes' }), texto: 'Planes', activa: (r) => r.tipo === 'planes' },
   { hash: aHash({ tipo: 'historial' }), texto: 'Historial', activa: (r) => r.tipo === 'historial' },
   { hash: aHash({ tipo: 'nuevo' }), texto: 'Nuevo kiosco', activa: (r) => r.tipo === 'nuevo' },
 ]
@@ -49,7 +51,8 @@ export function PantallaOperador({ servicio, alCerrarSesion }: Props) {
     }
   }, [servicio, version])
 
-  const sinListaTodavia = kioscos === null && !error && ruta.tipo !== 'nuevo' && ruta.tipo !== 'historial'
+  const sinListaTodavia =
+    kioscos === null && !error && ruta.tipo !== 'nuevo' && ruta.tipo !== 'historial' && ruta.tipo !== 'planes'
 
   return (
     <main className="operador">
@@ -73,6 +76,7 @@ export function PantallaOperador({ servicio, alCerrarSesion }: Props) {
       )}
       {sinListaTodavia && <p className="cargando">Cargando…</p>}
       {ruta.tipo === 'nuevo' && <AltaKiosco servicio={servicio} alAlta={recargar} />}
+      {ruta.tipo === 'planes' && <EditorPlanes servicio={servicio} alGuardar={recargar} />}
       {ruta.tipo === 'historial' && (
         <HistorialOperador servicio={servicio} kioscos={kioscos ?? []} version={version} />
       )}

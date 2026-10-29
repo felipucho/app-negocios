@@ -3,12 +3,13 @@ import type { Cuenta } from '../auth/cuenta'
 import type { ResultadoLogin, SesionAuth } from '../auth/useSesion'
 import type { AnulacionHecha, CajaDia, VentaDelDia } from '../caja-del-dia/servicioCajaDelDia'
 import type { FilaRanking } from '../caja/ranking'
-import type { CursorHistorial, FilaHistorial } from '../jefe/jefe'
+import type { CursorHistorial, FilaHistorial, ModuloJefe } from '../jefe/jefe'
 import type { ClaveModulo, Modulo } from '../modulos/modulos'
 import type { ConfigNegocio, EstadoAbono } from '../negocio/config'
-import type { AltaKiosco, EntradaHistorial, FichaKiosco, KioscoResumen, ModuloDeKiosco } from '../operador/operador'
+import type { AltaKiosco, ClaveRestablecida, EfectoEdicionPlan, EfectoPlan, EntradaHistorial, FichaKiosco, KioscoResumen, ModuloDeKiosco, ModuloDePlan, PlanOperador, SesionesCerradas } from '../operador/operador'
 import type { MedioCobroFiado, SaldoFiado, ServicioFiado } from '../fiado/fiado'
 import type { GestionProducto, ServicioPrecios } from '../precios/precios'
+import type { DatosProveedor, Proveedor, ServicioProveedores } from '../proveedores/proveedores'
 import type { Faltante, ServicioStock, StockProducto } from '../stock/stock'
 import type { MovimientoCaja, MovimientoDelTurno, ServicioMovimientosCaja } from '../turno/movimientosCaja'
 import type { ClienteCaja } from '../pagos/clientes'
@@ -71,7 +72,7 @@ function turnoFalso() {
   }
 }
 
-const TODOS_LOS_MODULOS: ClaveModulo[] = ['fiado', 'precios', 'movimientos_caja', 'stock', 'varios']
+const TODOS_LOS_MODULOS: ClaveModulo[] = ['fiado', 'precios', 'movimientos_caja', 'stock', 'varios', 'proveedores']
 
 /** Catálogo de módulos con los activos que pasa el test. */
 export function modulosDePrueba(activos: readonly ClaveModulo[]): Modulo[] {
@@ -124,6 +125,8 @@ export function serviciosFalsos(
     })),
     jefe: {
       cambiarModuloFiado: vi.fn(async (activo: boolean) => activo),
+      cambiarModulo: vi.fn(async (_clave: string, activo: boolean) => activo),
+      modulos: vi.fn(async (): Promise<ModuloJefe[]> => []),
       anonimizarCliente: vi.fn(async (id: string): Promise<Cliente> => ({ id, nombre: 'Cliente suprimido', telefono: null })),
       leerHistorial: vi.fn(async (_despuesDe: CursorHistorial | null): Promise<FilaHistorial[]> => []),
     },
@@ -178,6 +181,23 @@ export function serviciosFalsos(
         listarDelTurno: vi.fn(async (): Promise<MovimientoDelTurno[]> => []),
       }),
     ),
+    proveedores: vi.fn(
+      (_dispositivoId: string): ServicioProveedores => ({
+        leerProveedores: vi.fn(async (): Promise<Proveedor[]> => []),
+        leerVisitas: vi.fn(async () => []),
+        leerPedidos: vi.fn(async () => []),
+        leerRetiros: vi.fn(async () => []),
+        guardarProveedor: vi.fn(async (id: string, datos: DatosProveedor): Promise<Proveedor> => ({ id, ...datos })),
+        registrarVisita: vi.fn(async () => undefined),
+        marcarVisita: vi.fn(async () => undefined),
+        quitarVisita: vi.fn(async () => undefined),
+        agregarPedido: vi.fn(async () => undefined),
+        marcarPedido: vi.fn(async () => undefined),
+        quitarPedido: vi.fn(async () => undefined),
+        agregarFaltantes: vi.fn(async () => ({ cantidad: 0 })),
+        registrarRetiro: vi.fn(async () => undefined),
+      }),
+    ),
     operador: {
       esOperador: vi.fn(async (): Promise<boolean> => false),
       resumenKioscos: vi.fn(async (): Promise<KioscoResumen[]> => []),
@@ -197,13 +217,25 @@ export function serviciosFalsos(
           pcs: [],
           notas: [],
           recordatorios: [],
+          plan: null,
         }),
       ),
       guardarDatos: vi.fn(async () => undefined),
       subirLogo: vi.fn(async (): Promise<string> => 'https://ejemplo.test/storage/v1/object/public/logos/logo.png'),
       modulosDeKiosco: vi.fn(async (): Promise<ModuloDeKiosco[]> => []),
       cambiarModulo: vi.fn(async () => undefined),
+      listarPlanes: vi.fn(async (): Promise<PlanOperador[]> => []),
+      previsualizarPlan: vi.fn(async (): Promise<EfectoPlan[]> => []),
+      fijarPlan: vi.fn(async () => undefined),
+      modulosDePlan: vi.fn(async (): Promise<ModuloDePlan[]> => []),
+      previsualizarGuardarPlan: vi.fn(async (): Promise<EfectoEdicionPlan[]> => []),
+      guardarPlan: vi.fn(async () => undefined),
+      fijarExcepcion: vi.fn(async () => undefined),
       altaKiosco: vi.fn(async (): Promise<AltaKiosco> => ({ negocioId: 'n-nuevo', cuentas: [] })),
+      restablecerClave: vi.fn(
+        async (): Promise<ClaveRestablecida> => ({ rol: 'jefe', email: 'jefe@kiosco.local', password: null, sesionesCerradas: true }),
+      ),
+      cerrarSesiones: vi.fn(async (): Promise<SesionesCerradas> => ({ rol: 'jefe', sesionesCerradas: true })),
       agregarNota: vi.fn(async () => undefined),
       borrarNota: vi.fn(async () => undefined),
       agregarRecordatorio: vi.fn(async () => undefined),

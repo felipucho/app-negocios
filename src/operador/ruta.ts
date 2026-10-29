@@ -6,6 +6,7 @@ export type Ruta =
   | { tipo: 'inicio' }
   | { tipo: 'kioscos'; filtro: string | null }
   | { tipo: 'kiosco'; negocioId: string; pestania: Pestania }
+  | { tipo: 'planes' }
   | { tipo: 'historial' }
   | { tipo: 'nuevo' }
 
@@ -21,6 +22,7 @@ export function leerRuta(hash: string): Ruta {
     return { tipo: 'kiosco', negocioId, pestania: pestaniaValida }
   }
   if (seccion === 'kioscos') return { tipo: 'kioscos', filtro: new URLSearchParams(consulta).get('filtro') }
+  if (seccion === 'planes') return { tipo: 'planes' }
   if (seccion === 'historial') return { tipo: 'historial' }
   if (seccion === 'nuevo') return { tipo: 'nuevo' }
   return { tipo: 'inicio' }
@@ -34,6 +36,8 @@ export function aHash(ruta: Ruta): string {
       return ruta.filtro ? `#/kioscos?filtro=${ruta.filtro}` : '#/kioscos'
     case 'kiosco':
       return `#/kioscos/${ruta.negocioId}/${ruta.pestania}`
+    case 'planes':
+      return '#/planes'
     case 'historial':
       return '#/historial'
     case 'nuevo':

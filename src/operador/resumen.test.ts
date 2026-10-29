@@ -22,6 +22,10 @@ function kiosco(extra: Partial<KioscoResumen>): KioscoResumen {
     ultimaVenta: null,
     recordatoriosHoy: 0,
     altaEsteMes: false,
+    planCodigo: null,
+    planNombre: null,
+    extras: 0,
+    quitados: 0,
     ...extra,
   }
 }

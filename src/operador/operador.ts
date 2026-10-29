@@ -20,25 +20,111 @@ export interface KioscoResumen {
   ultimaVenta: string | null
   recordatoriosHoy: number
   altaEsteMes: boolean
+  planCodigo: string | null
+  planNombre: string | null
+  extras: number
+  quitados: number
 }
 
+/** derecho: lo da el plan o un extra. uso: lo que el jefe prendió. activo: derecho, uso y dependencias prendidas. */
 export interface ModuloDeKiosco {
   clave: string
   descripcion: string
+  enPlan: boolean
+  excepcion: 'agregado' | 'quitado' | null
+  derecho: boolean
+  uso: boolean
   activo: boolean
+  faltan: string[]
 }
 
+export interface PlanOperador {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string
+  activo: boolean
+  modulos: number
+}
+
+export interface PlanDeKiosco {
+  codigo: string
+  nombre: string
+  extras: number
+  quitados: number
+}
+
+export interface EfectoPlan {
+  clave: string
+  descripcion: string
+  efecto: 'gana' | 'pierde' | 'igual'
+  uso: boolean
+}
+
+/** Lo que gana o pierde un kiosco si su plan queda con otros módulos. 'pierde' con uso se apaga al guardar. */
+export interface EfectoEdicionPlan extends EfectoPlan {
+  negocioId: string
+  kiosco: string
+}
+
+/** Un módulo del catálogo: si el plan lo incluye y qué módulos requiere. */
+export interface ModuloDePlan {
+  clave: string
+  descripcion: string
+  enPlan: boolean
+  requiere: string[]
+}
+
+export interface DatosPlan {
+  nombre: string
+  descripcion: string
+  modulos: string[]
+}
+
+/** Lo que carga el operador al dar de alta: las cuentas (clave vacía = se genera), los datos del cliente y el contacto del dueño. */
 export interface DatosAlta {
   nombre: string
   nombreVisible: string
   emailJefe: string
   emailCaja: string
+  claveJefe: string
+  claveCaja: string
+  colorPrimario: string
+  clienteDesde: string
+  esDemo: boolean
+  etiquetas: string[]
+  contactoNombre: string
+  contactoTelefono: string
+  contactoDireccion: string
 }
 
-/** Las claves sólo viajan en esta respuesta: la pantalla las muestra una vez y no se guardan. */
+/** Las claves generadas sólo viajan en esta respuesta: la pantalla las muestra una vez y no se guardan. Null = la eligió el operador. */
 export interface AltaKiosco {
   negocioId: string
-  cuentas: { rol: 'jefe' | 'caja'; email: string; password: string }[]
+  cuentas: { rol: 'jefe' | 'caja'; email: string; password: string | null }[]
+}
+
+export interface DatosRestablecer {
+  negocioId: string
+  rol: 'jefe' | 'caja'
+  motivo: string
+  clave: string
+}
+
+/** La generada sólo viaja en esta respuesta. Null = la cargó el operador. sesionesCerradas false = la clave cambió pero no se cerraron las sesiones abiertas. */
+export interface ClaveRestablecida {
+  rol: 'jefe' | 'caja'
+  email: string
+  password: string | null
+  sesionesCerradas: boolean
+}
+
+export type DatosCerrarSesiones = Omit<DatosRestablecer, 'clave'>
+
+/** sesionesCerradas false = el pedido quedó en el historial, pero las sesiones siguen abiertas. */
+export interface SesionesCerradas {
+  rol: 'jefe' | 'caja'
+  sesionesCerradas: boolean
 }
 
 export interface DatosKiosco {
@@ -55,6 +141,7 @@ export interface DatosKiosco {
 
 export interface FichaKiosco {
   datos: DatosKiosco
+  plan: PlanDeKiosco | null
   pcs: { prefijo: string; creado: string; turnoAbierto: boolean }[]
   notas: { id: string; texto: string; creada: string }[]
   recordatorios: { id: string; texto: string; venceEl: string; hechoEn: string | null }[]
@@ -88,7 +175,16 @@ export interface ServicioOperador {
   subirLogo(negocioId: string, archivo: File): Promise<string>
   modulosDeKiosco(negocioId: string): Promise<ModuloDeKiosco[]>
   cambiarModulo(negocioId: string, clave: string, activo: boolean, motivo: string): Promise<void>
+  listarPlanes(): Promise<PlanOperador[]>
+  previsualizarPlan(negocioId: string, planId: string): Promise<EfectoPlan[]>
+  fijarPlan(negocioId: string, planId: string, motivo: string): Promise<void>
+  modulosDePlan(planId: string): Promise<ModuloDePlan[]>
+  previsualizarGuardarPlan(planId: string, modulos: string[]): Promise<EfectoEdicionPlan[]>
+  guardarPlan(planId: string, datos: DatosPlan, motivo: string): Promise<void>
+  fijarExcepcion(negocioId: string, clave: string, permite: boolean | null, motivo: string): Promise<void>
   altaKiosco(datos: DatosAlta): Promise<AltaKiosco>
+  restablecerClave(datos: DatosRestablecer): Promise<ClaveRestablecida>
+  cerrarSesiones(datos: DatosCerrarSesiones): Promise<SesionesCerradas>
   agregarNota(negocioId: string, texto: string): Promise<void>
   borrarNota(notaId: string): Promise<void>
   agregarRecordatorio(negocioId: string, texto: string, venceEl: string): Promise<void>
@@ -132,6 +228,15 @@ interface FilaFicha {
   pcs: { prefijo: string; creado: string; turno_abierto: boolean }[]
   notas: { id: string; texto: string; creada: string }[]
   recordatorios: { id: string; texto: string; vence_el: string; hecho_en: string | null }[]
+  plan: PlanDeKiosco | null
+}
+
+interface FilaPlanKiosco {
+  negocio_id: string
+  plan_codigo: string
+  plan_nombre: string
+  extras: number
+  quitados: number
 }
 
 interface FilaHistorial {
@@ -146,21 +251,30 @@ interface FilaHistorial {
   valor_nuevo: Record<string, unknown> | null
 }
 
-interface FilaModulo {
-  modulo: string
-  descripcion: string
-  activo: boolean
-}
+type FilaModulo = Omit<ModuloDeKiosco, 'enPlan'> & { en_plan: boolean }
+
+type FilaEfectoEdicion = Omit<EfectoEdicionPlan, 'negocioId'> & { negocio_id: string }
 
 const MENSAJES_OPERADOR: Record<string, string> = {
   no_operador: 'Esta cuenta no administra kioscos.',
   mfa_requerido: 'Esta cuenta tiene MFA y la sesión no lo confirmó. El panel todavía no pide el código.',
   nombre_invalido: 'El nombre tiene que tener entre 1 y 80 caracteres.',
   nombre_visible_invalido: 'El nombre visible tiene que tener entre 1 y 60 caracteres.',
+  nombre_plan_invalido: 'El nombre del plan tiene que tener entre 1 y 60 caracteres.',
+  descripcion_invalida: 'La descripción tiene que tener hasta 200 caracteres.',
   email_invalido: 'Revisá los mails: tienen que ser direcciones válidas.',
   emails_iguales: 'El mail del jefe y el de la caja tienen que ser distintos.',
   email_ocupado: 'Ese mail ya tiene una cuenta.',
+  clave_invalida: 'Cada clave tiene que tener entre 8 y 72 caracteres, sin espacios al principio ni al final.',
+  clave_debil: 'El servidor no acepta esa clave. Probá una más larga o más variada.',
   kiosco_desconocido: 'Ese kiosco ya no existe.',
+  sin_derecho: 'Ese módulo no está en el plan del kiosco. Agregalo como extra o cambiá de plan.',
+  dependencia_inactiva: 'Antes prendé: {detalle}.',
+  dependencia_sin_derecho: 'Para dar este extra primero hay que dar: {detalle}.',
+  modulo_requerido: 'Antes apagá: {detalle}, porque lo necesitan.',
+  plan_desconocido: 'Ese plan ya no existe. Recargá la página y elegí otro.',
+  id_repetido: 'Esa operación ya se registró con otros datos. Recargá la página y probá de nuevo.',
+  pedido_invalido: 'El pedido no es válido. Recargá la página y probá de nuevo.',
   modulo_desconocido: 'Ese módulo no existe.',
   motivo_invalido: 'El motivo tiene que tener entre 3 y 200 caracteres.',
   color_invalido: 'El color tiene que ser #RRGGBB.',
@@ -171,11 +285,27 @@ const MENSAJES_OPERADOR: Record<string, string> = {
   texto_invalido: 'El texto está vacío o es demasiado largo.',
   nota_desconocida: 'Esa nota ya no existe.',
   recordatorio_desconocido: 'Ese recordatorio ya no existe.',
+  metodo_no_permitido: 'Esa operación no está permitida. Recargá la página y probá de nuevo.',
+  restablecer_fallido: 'No se pudo restablecer la clave. Probá de nuevo.',
+  cerrar_sesiones_fallido: 'No se pudieron cerrar las sesiones. Probá de nuevo.',
+  rol_invalido: 'Elegí si la cuenta es la del jefe o la de la caja.',
+  cuenta_desconocida: 'Ese kiosco no tiene una cuenta con ese rol.',
   red: 'No se pudo contactar al servidor. Revisá la conexión y probá de nuevo.',
 }
 
+/** Textos para cuando la base no trae las claves en detalle. */
+const SIN_DETALLE: Record<string, string> = {
+  dependencia_inactiva: 'Antes prendé los módulos de los que depende.',
+  dependencia_sin_derecho: 'Para dar este extra primero hay que dar los módulos de los que depende.',
+  modulo_requerido: 'Antes apagá los módulos que lo necesitan.',
+}
+
 export function mensajeOperador(e: unknown): string {
-  return MENSAJES_OPERADOR[codigoDeError(e)] ?? 'No se pudo completar. Probá de nuevo.'
+  const codigo = codigoDeError(e)
+  const mensaje = MENSAJES_OPERADOR[codigo] ?? 'No se pudo completar. Probá de nuevo.'
+  if (!mensaje.includes('{detalle}')) return mensaje
+  const detalle = typeof e === 'object' && e !== null && 'detalle' in e && typeof e.detalle === 'string' ? e.detalle : ''
+  return detalle ? mensaje.replace('{detalle}', detalle.replace(/,/g, ', ')) : (SIN_DETALLE[codigo] ?? mensaje)
 }
 
 /** Código del cuerpo de la función ({ error }); 'red' si no llegó ninguna respuesta. */
@@ -189,6 +319,11 @@ async function codigoDeRespuesta(e: unknown): Promise<string> {
 const TIPOS_LOGO: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
 const TAMANIO_MAXIMO_LOGO = 300 * 1024
 
+/** La base manda el código en message y, en algunos errores, las claves afectadas en details. */
+function errorDeRpc(error: { message: string; details: string | null }): Error {
+  return Object.assign(new Error(error.message), { detalle: error.details })
+}
+
 export function crearServicioOperador(supabase: SupabaseClient): ServicioOperador {
   return {
     async esOperador() {
@@ -197,9 +332,11 @@ export function crearServicioOperador(supabase: SupabaseClient): ServicioOperado
       return data === true
     },
     async resumenKioscos() {
-      const { data, error } = await supabase.rpc('resumen_kioscos')
-      if (error) throw error
-      return (data as FilaResumen[]).map((f) => ({
+      const [resumen, planes] = await Promise.all([supabase.rpc('resumen_kioscos'), supabase.rpc('operador_planes_kioscos')])
+      if (resumen.error) throw resumen.error
+      if (planes.error) throw planes.error
+      const planPorNegocio = new Map((planes.data as FilaPlanKiosco[]).map((p) => [p.negocio_id, p]))
+      return (resumen.data as FilaResumen[]).map((f) => ({
         negocioId: f.negocio_id,
         nombre: f.nombre,
         nombreVisible: f.nombre_visible,
@@ -218,6 +355,10 @@ export function crearServicioOperador(supabase: SupabaseClient): ServicioOperado
         ultimaVenta: f.ultima_venta,
         recordatoriosHoy: f.recordatorios_hoy,
         altaEsteMes: f.alta_este_mes,
+        planCodigo: planPorNegocio.get(f.negocio_id)?.plan_codigo ?? null,
+        planNombre: planPorNegocio.get(f.negocio_id)?.plan_nombre ?? null,
+        extras: planPorNegocio.get(f.negocio_id)?.extras ?? 0,
+        quitados: planPorNegocio.get(f.negocio_id)?.quitados ?? 0,
       }))
     },
     async ficha(negocioId) {
@@ -238,6 +379,7 @@ export function crearServicioOperador(supabase: SupabaseClient): ServicioOperado
         },
         pcs: f.pcs.map((p) => ({ prefijo: p.prefijo, creado: p.creado, turnoAbierto: p.turno_abierto })),
         notas: f.notas,
+        plan: f.plan,
         recordatorios: f.recordatorios.map((r) => ({
           id: r.id,
           texto: r.texto,
@@ -271,23 +413,117 @@ export function crearServicioOperador(supabase: SupabaseClient): ServicioOperado
       return supabase.storage.from('logos').getPublicUrl(ruta).data.publicUrl
     },
     async modulosDeKiosco(negocioId) {
-      const { data, error } = await supabase.rpc('modulos_de_kiosco', { p_negocio: negocioId })
-      if (error) throw error
-      return (data as FilaModulo[]).map((f) => ({ clave: f.modulo, descripcion: f.descripcion, activo: f.activo }))
+      const { data, error } = await supabase.rpc('operador_modulos_kiosco', { p_negocio: negocioId })
+      if (error) throw errorDeRpc(error)
+      return (data as FilaModulo[]).map((f) => ({
+        clave: f.clave,
+        descripcion: f.descripcion,
+        enPlan: f.en_plan,
+        excepcion: f.excepcion,
+        derecho: f.derecho,
+        uso: f.uso,
+        activo: f.activo,
+        faltan: f.faltan,
+      }))
     },
     async cambiarModulo(negocioId, clave, activo, motivo) {
-      const { error } = await supabase.rpc('cambiar_modulo_kiosco', {
+      const { error } = await supabase.rpc('operador_fijar_uso', {
         p_negocio: negocioId,
         p_modulo: clave,
         p_activo: activo,
         p_motivo: motivo,
+        p_op_id: crypto.randomUUID(),
       })
+      if (error) throw errorDeRpc(error)
+    },
+    async listarPlanes() {
+      const { data, error } = await supabase.rpc('operador_listar_planes')
       if (error) throw error
+      return data as PlanOperador[]
+    },
+    async previsualizarPlan(negocioId, planId) {
+      const { data, error } = await supabase.rpc('operador_previsualizar_plan', { p_negocio: negocioId, p_plan_id: planId })
+      if (error) throw errorDeRpc(error)
+      return data as EfectoPlan[]
+    },
+    async fijarPlan(negocioId, planId, motivo) {
+      const { error } = await supabase.rpc('operador_fijar_plan', {
+        p_negocio: negocioId,
+        p_plan_id: planId,
+        p_motivo: motivo,
+        p_op_id: crypto.randomUUID(),
+      })
+      if (error) throw errorDeRpc(error)
+    },
+    async modulosDePlan(planId) {
+      // Catálogo, plan y dependencias los puede leer cualquier cuenta (RLS using true): no hace falta una función.
+      const [catalogo, plan, dependencias] = await Promise.all([
+        supabase.from('modulos').select('clave, descripcion').order('clave'),
+        supabase.from('plan_modulos').select('modulo').eq('plan_id', planId),
+        supabase.from('modulo_dependencias').select('modulo, requiere').eq('tipo', 'requiere'),
+      ])
+      if (catalogo.error) throw catalogo.error
+      if (plan.error) throw plan.error
+      if (dependencias.error) throw dependencias.error
+      const enPlan = new Set((plan.data as { modulo: string }[]).map((p) => p.modulo))
+      const requisitos = dependencias.data as { modulo: string; requiere: string }[]
+      return (catalogo.data as { clave: string; descripcion: string }[]).map((m) => ({
+        clave: m.clave,
+        descripcion: m.descripcion,
+        enPlan: enPlan.has(m.clave),
+        requiere: requisitos.filter((d) => d.modulo === m.clave).map((d) => d.requiere),
+      }))
+    },
+    async previsualizarGuardarPlan(planId, modulos) {
+      const { data, error } = await supabase.rpc('operador_previsualizar_guardar_plan', {
+        p_plan_id: planId,
+        p_modulos: modulos,
+      })
+      if (error) throw errorDeRpc(error)
+      return (data as FilaEfectoEdicion[]).map((f) => ({
+        negocioId: f.negocio_id,
+        kiosco: f.kiosco,
+        clave: f.clave,
+        descripcion: f.descripcion,
+        efecto: f.efecto,
+        uso: f.uso,
+      }))
+    },
+    async guardarPlan(planId, datos, motivo) {
+      const { error } = await supabase.rpc('operador_guardar_plan', {
+        p_plan_id: planId,
+        p_nombre: datos.nombre,
+        p_descripcion: datos.descripcion,
+        p_modulos: datos.modulos,
+        p_motivo: motivo,
+        p_op_id: crypto.randomUUID(),
+      })
+      if (error) throw errorDeRpc(error)
+    },
+    async fijarExcepcion(negocioId, clave, permite, motivo) {
+      const { error } = await supabase.rpc('operador_fijar_excepcion', {
+        p_negocio: negocioId,
+        p_modulo: clave,
+        p_permite: permite,
+        p_motivo: motivo,
+        p_op_id: crypto.randomUUID(),
+      })
+      if (error) throw errorDeRpc(error)
     },
     async altaKiosco(datos) {
       const { data, error } = await supabase.functions.invoke<AltaKiosco>('alta-kiosco', { body: datos })
       if (error) throw new Error(await codigoDeRespuesta(error))
       return data as AltaKiosco
+    },
+    async restablecerClave(datos) {
+      const { data, error } = await supabase.functions.invoke<ClaveRestablecida>('restablecer-clave', { body: datos })
+      if (error) throw new Error(await codigoDeRespuesta(error))
+      return data as ClaveRestablecida
+    },
+    async cerrarSesiones(datos) {
+      const { data, error } = await supabase.functions.invoke<SesionesCerradas>('cerrar-sesiones', { body: datos })
+      if (error) throw new Error(await codigoDeRespuesta(error))
+      return data as SesionesCerradas
     },
     async agregarNota(negocioId, texto) {
       const { error } = await supabase.rpc('agregar_nota', { p_negocio: negocioId, p_texto: texto })
