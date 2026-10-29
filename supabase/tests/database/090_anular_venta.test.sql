@@ -161,7 +161,7 @@ select ok((
     'public.confirmar_venta(uuid, uuid, jsonb, jsonb, integer, integer)'::regprocedure,
     -- Módulos de 2026-10-27: también entran en el turno.
     'public.cobrar_fiado(uuid, uuid, uuid, text, integer)'::regprocedure,
-    'public.registrar_movimiento_caja(uuid, uuid, text, integer, text)'::regprocedure,
+    'public.registrar_movimiento_caja(uuid, uuid, text, integer, text, uuid)'::regprocedure,
     'public.fijar_monto_inicial(uuid, integer)'::regprocedure
   ]) f
 ), 'anular_venta, cerrar_turno, abrir_turno, confirmar_venta y los que entran en el turno bloquean la PC (for update)');
