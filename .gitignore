@@ -15,6 +15,7 @@ dist-dev/
 .wrangler/
 playwright-report/
 test-results/
+.playwright-cli/
 supabase/.temp/
 supabase/.branches/
 .claude/settings.local.json
