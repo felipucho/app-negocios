@@ -10,7 +10,8 @@ select tables_are(
         'anulaciones', 'historial', 'version_app', 'productos_gestion', 'pagos_fiado', 'movimientos_caja',
         'stock_productos', 'movimientos_stock', 'aumentos_precios',
         'proveedores', 'visitas_proveedor', 'pedidos_proveedor', 'operadores', 'ficha_kiosco', 'notas_operador',
-        'recordatorios_operador', 'historial_operador'],
+        'recordatorios_operador', 'historial_operador',
+        'catalogo_global', 'catalogo_importaciones', 'catalogo_global_staging'],
   'el esquema public tiene exactamente las tablas del modelo'
 );
 
